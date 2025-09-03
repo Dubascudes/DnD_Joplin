@@ -1,0 +1,12 @@
+{
+	"compilerOptions": {
+		"outDir": "./dist/",
+		"module": "commonjs",
+		"target": "es2015",
+		"jsx": "react-jsx",
+		"allowJs": true,
+		"esModuleInterop": true,
+		"baseUrl": "."
+  },
+  "include": ["src/**/*"]
+}

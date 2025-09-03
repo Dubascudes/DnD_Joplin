@@ -1,0 +1,25 @@
+DnDCharacterPlugin
+│   dist
+│   ├── utils
+│   │   └── renderer.js
+│   ├── index.js
+│   └── manifest.json
+│   publish
+│   ├── tech.willenglish.dndplugin.jpl
+│   └── tech.willenglish.dndplugin.json
+│   src
+│   ├── utils
+│   │   ├── dnd.ts
+│   │   ├── renderer.js
+│   │   └── yaml.ts
+│   ├── index.ts
+│   └── manifest.json
+│   .gitignore
+│   .npmignore
+│   GENERATOR_DOC.md
+│   package-lock.json
+│   package.json
+│   plugin.config.json
+│   README.md
+│   tsconfig.json
+│   webpack.config.js
