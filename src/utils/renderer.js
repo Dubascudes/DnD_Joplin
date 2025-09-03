@@ -365,10 +365,76 @@ function buildUI() {
     // Styles
     var style = document.createElement('style');
     style.textContent = "\n    :root { --bd:#d0d4db; --tx:#101216; --mut:#5a6270; --bg:#ffffff; --chip:#f5f7fa; }\n    * { box-sizing: border-box; }\n    body { margin:0; background: var(--bg); color: var(--tx); font: 14px/1.35 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }\n    .wrap { padding: 12px; }\n    h2 { margin: 16px 0 8px; font-size: 16px; }\n    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }\n    .grid3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }\n    .cols { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: start; }\n    .card { border: 1px solid var(--bd); border-radius: 10px; padding: 10px; background: #fff; }\n    .lbl { display:block; }\n    .lblt { font-size: 11px; color: var(--mut); margin-bottom: 4px; }\n    .inp, .sel, textarea { width: 100%; padding: 8px; border: 1px solid var(--bd); border-radius: 8px; background: #fff; }\n    textarea { min-height: 80px; resize: vertical; }\n    .row { display:flex; gap:8px; align-items:center; }\n    .mut { color: var(--mut); }\n    .chip { background: var(--chip); border:1px solid var(--bd); padding:6px 8px; border-radius: 8px; }\n    .skills { display: grid; grid-template-columns: 1fr auto auto; gap: 6px 8px; align-items: center; }\n    .skillHead { font-size: 12px; color:var(--mut); display: contents; }\n    .btn { border:1px solid var(--bd); background:#fff; padding:8px 10px; border-radius: 8px; cursor:pointer; }\n    .btn:hover { background:#f9fafb; }\n    .btn.small { padding:4px 6px; font-size:12px; }\n    .right { text-align: right; }\n    .status { margin-left: 8px; color: var(--mut); }\n    .attacks .hdr, .attacks .row { display:grid; grid-template-columns: 1fr 120px 1fr 28px; gap: 6px; align-items:center; }\n    .attacks .hdr { color: var(--mut); font-size:12px; }\n  ";
+    // ADD inside style.textContent (near the other rules)
+    style.textContent += `
+    /* Keep skill prof selects compact */
+    .skills select,
+    .skills .sel {
+        width: 88px !important;
+        min-width: 88px !important;
+        max-width: 88px !important;
+        flex: 0 0 88px;
+        justify-self: start; /* prevents right-justifying in the grid cell */
+    }
+    /* Make the Skills grid columns stable */
+    .skills {
+        grid-template-columns: 1fr max-content max-content; /* name | total | prof */
+    }
+    `;
+    style.textContent += `
+  /* Save rows: compact the label + checkbox + total */
+  .saving-throws-grid .row { gap: 6px; }
+  .saving-throws-grid .mut { white-space: nowrap; }
+`;
+
+style.textContent += `
+  /* Top bar with left actions (Roll/Load/Save) and right tabs */
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .topbar .leftActions,
+  .topbar .rightActions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Tabs look exactly like .btn, active gets a subtle lift */
+  .tab.btn { /* already inherits .btn styles */ }
+  .tab.btn.active {
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+
+  /* Right column container (new class so we don't inherit global .right text-align) */
+  .rightCol { display: flex; flex-direction: column; min-width: 420px; }
+
+  /* The panel that holds whichever card is visible */
+  .rightPanel { display: flex; flex-direction: column; gap: 16px; }
+
+  /* Keep skill prof selects compact (from before) */
+  .skills select, .skills .sel {
+    width: 88px !important; min-width: 88px !important; max-width: 88px !important;
+    flex: 0 0 88px; justify-self: start;
+  }
+  .skills { grid-template-columns: 1fr max-content max-content; }
+
+  /* Saving throws compactness (from before) */
+  .saving-throws-grid .row { gap: 6px; }
+  .saving-throws-grid .mut { white-space: nowrap; }
+
+  /* Optional: remove extra top space inside the very first cards */
+  .left .card:first-child h2, .rightCol .card:first-child h2 { margin-top: 0; }
+`;
+
+
+
     document.head.appendChild(style);
     // Build columns
     var left = h('div', { class: 'left' });
-    var right = h('div', { class: 'right' });
+    var right = h('div', { class: 'rightCol' });
     // Identity
     var identity = h('div', { class: 'card' }, [
         h('h2', {}, ['Identity']),
@@ -395,12 +461,14 @@ function buildUI() {
     abilities.appendChild(abilWrap);
     var saves = h('div', { class: 'card' });
     saves.appendChild(h('h2', {}, ['Saving Throws']));
-    var saveGrid = h('div', { class: 'grid3' });
+    // var saveGrid = h('div', { class: 'grid3' });
+    var saveGrid = h('div', { class: 'grid3 saving-throws-grid' });
+
     ABILITIES.forEach(function (a) {
         var row = h('div', { class: 'row chip' }, [
             h('input', { type: 'checkbox', checked: !!ch.savingThrowsProficiencies[a] }),
             h('div', {}, ["".concat(a, " save")]),
-            h('div', { class: 'mut' }, ['total: ', h('span', { id: "save.total.".concat(a) }, [fmtSigned(derived.savingThrows[a])])]),
+            h('div', { class: 'mut' }, [h('span', { id: "save.total.".concat(a) }, [fmtSigned(derived.savingThrows[a])])]),
         ]);
         row.firstChild.addEventListener('change', function (ev) {
             var on = ev.target.checked;
@@ -489,10 +557,64 @@ function buildUI() {
             return ta;
         })(),
     ]);
-    // Right column assembly
-    right.appendChild(skillsCard);
-    right.appendChild(attacksCard);
-    right.appendChild(notesCard);
+    // --- Right column assembly (REPLACE this whole block) ---
+
+    // // Build the cards exactly as you already do:
+    // var skillsCard  = /* …same as your code… */;
+    // var attacksCard = /* …same as your code… */;
+    // var notesCard   = /* …same as your code… */;
+
+    // Tag them so we can toggle:
+    skillsCard.setAttribute('data-panel', 'skills');
+    attacksCard.setAttribute('data-panel', 'attacks');
+    notesCard.setAttribute('data-panel', 'notes');
+
+    // Tabs + panel shell
+    var tabs = h('div', { class: 'rightTabs' }, [
+    h('button', { class: 'btn tab active', 'data-target': 'skills' }, ['Skills']),
+    h('button', { class: 'btn tab', 'data-target': 'attacks' }, ['Attacks']),
+    h('button', { class: 'btn tab', 'data-target': 'notes' }, ['Notes']),
+    // add more tabs later: Spells, Inventory, etc.
+    ]);
+
+    var panel = h('div', { class: 'rightPanel' });
+
+    // Start with Skills visible
+    panel.appendChild(skillsCard);
+    panel.appendChild(attacksCard);
+    panel.appendChild(notesCard);
+
+    // Simple show/hide
+    function showPanel(which) {
+    // toggle active tab
+    Array.from(tabs.querySelectorAll('.tab')).forEach(btn =>
+        btn.classList.toggle('active', btn.getAttribute('data-target') === which)
+    );
+    // show only the requested card
+    Array.from(panel.children).forEach(el =>
+        el.style.display = (el.getAttribute('data-panel') === which) ? '' : 'none'
+    );
+    }
+
+    // Wire tab clicks
+    tabs.addEventListener('click', (e) => {
+    var btn = e.target.closest('.tab');
+    if (!btn) return;
+    showPanel(btn.getAttribute('data-target'));
+    });
+
+    // Assemble right column
+    right.innerHTML = '';          // clear
+    right.appendChild(tabs);
+    right.appendChild(panel);
+
+    // AFTER mounting everything, call once:
+    showPanel('skills');
+
+    // // Right column assembly
+    // right.appendChild(skillsCard);
+    // right.appendChild(attacksCard);
+    // right.appendChild(notesCard);
     // Top controls
     var topRow = h('div', { class: 'row', style: { marginBottom: '8px' } }, [
         h('button', { class: 'btn', id: 'btn.roll' }, ['Roll d20']),

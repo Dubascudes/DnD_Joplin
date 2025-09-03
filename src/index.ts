@@ -77,6 +77,7 @@ async function readCharacter(noteBody: string) {
   if (front?.dnd) return normalizeYamlToCharacter(front.dnd);
   return null;
 }
+
 async function saveCharacterToCurrentNote(character: any): Promise<string> {
   const fresh = await getFreshActiveNoteBody();
   if (!fresh) throw new Error('No active note');
