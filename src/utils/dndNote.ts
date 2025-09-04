@@ -146,29 +146,69 @@ export function normalizeYamlToCharacter(raw: any) {
   if (typeof raw?.speed === 'number') out.speed = `${raw.speed} ft`;
   else out.speed = raw?.speed ?? '30 ft';
 
-  // 4) save proficiencies: YAML has "saves: []"
-  const savesArr: string[] = Array.isArray(raw?.saves) ? raw.saves : [];
-  out.savingThrowsProficiencies = {
-    STR: savesArr.includes('STR'),
-    DEX: savesArr.includes('DEX'),
-    CON: savesArr.includes('CON'),
-    INT: savesArr.includes('INT'),
-    WIS: savesArr.includes('WIS'),
-    CHA: savesArr.includes('CHA'),
-  };
-
-  // 5) skills: YAML has "skillsProficient: []"
-  const profSk: string[] = Array.isArray(raw?.skillsProficient) ? raw.skillsProficient : [];
-  // panel expects a dict with 'none' | 'prof' | 'expert'
-  const skillMap: Record<string,'none'|'prof'|'expert'> = {};
-  // add all skills so UI totals aren’t NaN
+  // Helpers
+  const ABILS = ['STR','DEX','CON','INT','WIS','CHA'] as const;
   const ALL_SKILLS = [
     'Acrobatics','Animal Handling','Arcana','Athletics','Deception','History','Insight',
     'Intimidation','Investigation','Medicine','Nature','Perception','Performance',
     'Persuasion','Religion','Sleight of Hand','Stealth','Survival',
-  ];
+  ] as const;
+
+  // 4) saving throw proficiencies
+  // Accept either:
+  //  - object form: {STR: true/false, ...}
+  //  - array form: ['STR','DEX', ...]
+  const rawSaves = raw?.savingThrowsProficiencies ?? raw?.saves ?? null;
+  const savingObj: Record<typeof ABILS[number], boolean> = {
+    STR: false, DEX: false, CON: false, INT: false, WIS: false, CHA: false,
+  };
+
+  if (Array.isArray(rawSaves)) {
+    for (const a of ABILS) savingObj[a] = rawSaves.includes(a);
+  } else if (rawSaves && typeof rawSaves === 'object') {
+    for (const a of ABILS) {
+      const v = (rawSaves as any)[a] ?? (rawSaves as any)[a.toLowerCase()];
+      savingObj[a] = Boolean(v);
+    }
+  }
+  out.savingThrowsProficiencies = savingObj;
+
+  // 5) skills: accept either
+  //  - object form: { Arcana: 'expert' | 'prof' | 'none' | boolean | number }
+  //  - array form: ['Arcana', ...] meaning 'prof'
+  // Normalize values to 'none' | 'prof' | 'expert'
+  const normalizeSkillLevel = (v: any): 'none' | 'prof' | 'expert' => {
+    if (typeof v === 'string') {
+      const s = v.trim().toLowerCase();
+      if (['expert','expertise','exp','x','2'].includes(s)) return 'expert';
+      if (['prof','proficient','p','1','true','yes','y','t'].includes(s)) return 'prof';
+      return 'none';
+    }
+    if (v === true) return 'prof';
+    if (v === false || v == null) return 'none';
+    if (typeof v === 'number') {
+      if (v >= 2) return 'expert';
+      if (v >= 1) return 'prof';
+      return 'none';
+    }
+    return 'none';
+  };
+
+  const rawSkills = raw?.skillsProficiencies ?? raw?.skills ?? null;
+  const skillMap: Record<(typeof ALL_SKILLS)[number], 'none'|'prof'|'expert'> = {} as any;
   for (const sk of ALL_SKILLS) skillMap[sk] = 'none';
-  for (const sk of profSk) if (skillMap.hasOwnProperty(sk)) skillMap[sk] = 'prof';
+
+  if (Array.isArray(rawSkills)) {
+    // array means all listed skills are 'prof'
+    for (const sk of rawSkills) {
+      if (sk in skillMap) skillMap[sk as (typeof ALL_SKILLS)[number]] = 'prof';
+    }
+  } else if (rawSkills && typeof rawSkills === 'object') {
+    for (const sk of ALL_SKILLS) {
+      const v = (rawSkills as any)[sk];
+      if (v !== undefined) skillMap[sk] = normalizeSkillLevel(v);
+    }
+  }
   out.skillsProficiencies = skillMap;
 
   // 6) other optional fields
@@ -176,6 +216,5 @@ export function normalizeYamlToCharacter(raw: any) {
   out.notes = raw?.notes ?? '';
 
   // ignore profBonus from YAML — the panel computes proficiency from level
-
   return out;
 }

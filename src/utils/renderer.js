@@ -201,6 +201,66 @@ function rollExpr(expr) {
     var sign = k >= 0 ? "+".concat(k) : "".concat(k);
     return { total: total, detail: "".concat(n, "d").concat(faces).concat(k ? sign : '', " = [").concat(rolls.join(', '), "] ").concat(n < 0 ? '=> negate ' : '').concat(subtotal).concat(k ? " ".concat(sign, " = ").concat(total) : '') };
 }
+
+// Roll composite damage like "2d6+1d4+3" or "d8+2" (any number of dice terms + integer modifiers)
+// Returns: { total, detail, expr, exprForHost }
+// - expr         : normalized internal form, may begin with '+'
+// - exprForHost  : ONLY set when the expression is a simple NdM(+|-)K your host likely accepts
+function rollCompositeDamage(expr) {
+  var raw = String(expr || '0').replace(/\s+/g, '');
+  if (!raw) raw = '0';
+
+  // Keep a copy without a leading '+' for host, if we end up needing it
+  var rawNoLeading = raw.replace(/^\+/, '');
+
+  // Ensure our internal parse starts with a sign, to make tokenization easier
+  var parseStr = /^[+\-]/.test(raw) ? raw : ('+' + raw);
+
+  // Tokenize into signed terms: +<NdM> | -<NdM> | +<int> | -<int>
+  var tokens = [], m;
+  var re = /([+\-])(\d*d\d+|\d+)/ig;
+  while ((m = re.exec(parseStr)) !== null) {
+    tokens.push({ sign: m[1] === '-' ? -1 : 1, term: m[2] });
+  }
+
+  var total = 0, parts = [];
+  tokens.forEach(function (tok) {
+    var t = tok.term.toLowerCase();
+    if (t.includes('d')) {
+      var mm = /^(\d*)d(\d+)$/.exec(t);
+      if (!mm) return;
+      var n = mm[1] ? parseInt(mm[1], 10) : 1;
+      var faces = parseInt(mm[2], 10);
+      n = Math.max(1, n);
+      var rolls = [];
+      for (var i = 0; i < n; i++) rolls.push(1 + Math.floor(Math.random() * faces));
+      var subtotal = rolls.reduce((a,b)=>a+b,0) * tok.sign;
+      total += subtotal;
+      parts.push(`${tok.sign<0?'-':'+'}${n}d${faces}[${rolls.join(',')}]${tok.sign<0?'(neg)':''}`);
+    } else {
+      var k = parseInt(t, 10);
+      if (!Number.isFinite(k)) k = 0;
+      k *= tok.sign;
+      total += k;
+      parts.push(`${tok.sign<0?'-':'+'}${Math.abs(k)}`);
+    }
+  });
+
+  var detail = parts.join(' ').replace(/^\+/, '');
+  var normalizedExpr = parseStr; // may start with '+'
+
+  // Heuristic: provide exprForHost only for simple NdM(+|-)K (or just NdM)
+  // Examples that pass: "2d8", "2d8+2", "d6-1", "+2d8+2" (we’ll strip leading '+')
+  var simpleHostRe = /^\+?\d*d\d+(?:[+\-]\d+)?$/i;
+  var exprForHost = null;
+  if (simpleHostRe.test(normalizedExpr)) {
+    exprForHost = normalizedExpr.replace(/^\+/, ''); // strip leading '+' for host
+  }
+
+  return { total, detail, expr: normalizedExpr, exprForHost, raw: rawNoLeading };
+}
+
+
 // ---- Defaults / Persistence ----
 var LOCAL_KEY = 'dnd.character.editor.v1';
 function defaultCharacter() {
@@ -358,330 +418,482 @@ function selectProf(initial, onChange) {
     return sel;
 }
 // ---- Build UI ----
+// ---- Build UI ----
 function buildUI() {
-    var root = document.getElementById('root');
-    if (!root)
-        return;
-    // Styles
-    var style = document.createElement('style');
-    style.textContent = "\n    :root { --bd:#d0d4db; --tx:#101216; --mut:#5a6270; --bg:#ffffff; --chip:#f5f7fa; }\n    * { box-sizing: border-box; }\n    body { margin:0; background: var(--bg); color: var(--tx); font: 14px/1.35 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }\n    .wrap { padding: 12px; }\n    h2 { margin: 16px 0 8px; font-size: 16px; }\n    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }\n    .grid3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }\n    .cols { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: start; }\n    .card { border: 1px solid var(--bd); border-radius: 10px; padding: 10px; background: #fff; }\n    .lbl { display:block; }\n    .lblt { font-size: 11px; color: var(--mut); margin-bottom: 4px; }\n    .inp, .sel, textarea { width: 100%; padding: 8px; border: 1px solid var(--bd); border-radius: 8px; background: #fff; }\n    textarea { min-height: 80px; resize: vertical; }\n    .row { display:flex; gap:8px; align-items:center; }\n    .mut { color: var(--mut); }\n    .chip { background: var(--chip); border:1px solid var(--bd); padding:6px 8px; border-radius: 8px; }\n    .skills { display: grid; grid-template-columns: 1fr auto auto; gap: 6px 8px; align-items: center; }\n    .skillHead { font-size: 12px; color:var(--mut); display: contents; }\n    .btn { border:1px solid var(--bd); background:#fff; padding:8px 10px; border-radius: 8px; cursor:pointer; }\n    .btn:hover { background:#f9fafb; }\n    .btn.small { padding:4px 6px; font-size:12px; }\n    .right { text-align: right; }\n    .status { margin-left: 8px; color: var(--mut); }\n    .attacks .hdr, .attacks .row { display:grid; grid-template-columns: 1fr 120px 1fr 28px; gap: 6px; align-items:center; }\n    .attacks .hdr { color: var(--mut); font-size:12px; }\n  ";
-    // ADD inside style.textContent (near the other rules)
-    style.textContent += `
-    /* Keep skill prof selects compact */
-    .skills select,
-    .skills .sel {
-        width: 88px !important;
-        min-width: 88px !important;
-        max-width: 88px !important;
-        flex: 0 0 88px;
-        justify-self: start; /* prevents right-justifying in the grid cell */
+  var root = document.getElementById('root');
+  if (!root) return;
+
+  // Styles
+  var style = document.createElement('style');
+  style.textContent = `
+    :root { --bd:#d0d4db; --tx:#101216; --mut:#5a6270; --bg:#ffffff; --chip:#f5f7fa; }
+    * { box-sizing: border-box; }
+    body { margin:0; background: var(--bg); color: var(--tx); font: 14px/1.35 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    .wrap { padding: 12px; }
+    h2 { margin: 16px 0 8px; font-size: 16px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .grid3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+    .cols { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: start; }
+    .card { border: 1px solid var(--bd); border-radius: 10px; padding: 10px; background: #fff; }
+    .lbl { display:block; }
+    .lblt { font-size: 11px; color: var(--mut); margin-bottom: 4px; }
+    .inp, .sel, textarea { width: 100%; padding: 8px; border: 1px solid var(--bd); border-radius: 8px; background: #fff; }
+    textarea { min-height: 80px; resize: vertical; }
+    .row { display:flex; gap:8px; align-items:center; }
+    .mut { color: var(--mut); }
+    .chip { background: var(--chip); border:1px solid var(--bd); padding:6px 8px; border-radius: 8px; }
+    .skills { display: grid; grid-template-columns: 1fr auto auto; gap: 6px 8px; align-items: center; }
+    .skillHead { font-size: 12px; color:var(--mut); display: contents; }
+    .btn { border:1px solid var(--bd); background:#fff; padding:8px 10px; border-radius: 8px; cursor:pointer; }
+    .btn:hover { background:#f9fafb; }
+    .btn.small { padding:4px 6px; font-size:12px; }
+    .right { text-align: right; }
+    .status { margin-left: 8px; color: var(--mut); }
+    .attacks .hdr, .attacks .row {
+        display: grid;
+        grid-template-columns: 1.2fr 100px 100px 1fr 1fr max-content; /* Attack | Range | Hit/DC | Damage | Notes | ✕ */
+        gap: 6px;
+        align-items: center;
     }
-    /* Make the Skills grid columns stable */
-    .skills {
-        grid-template-columns: 1fr max-content max-content; /* name | total | prof */
+    .attacks .hdr { color: var(--mut); font-size:12px; }
+    .attack-roll-btn { white-space: nowrap; }
+
+    /* Top bar (left: roll/load/save, right: tabs) */
+    .topbar {
+      position: sticky; top: 0; z-index: 10;
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 8px; padding-top: 8px; background: var(--bg);
     }
-    `;
-    style.textContent += `
-  /* Save rows: compact the label + checkbox + total */
-  .saving-throws-grid .row { gap: 6px; }
-  .saving-throws-grid .mut { white-space: nowrap; }
+    .topbar .leftActions, .topbar .rightActions {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .tab.btn {} /* inherits .btn */
+    .tab.btn.active { box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+
+    /* Right column container (avoid global .right{text-align:right}) */
+    .rightCol { display: flex; flex-direction: column; min-width: 420px; }
+    .rightPanel { display: flex; flex-direction: column; gap: 16px; }
+
+    /* Keep skill prof selects compact and stable */
+    .skills select, .skills .sel {
+      width: 88px !important; min-width: 88px !important; max-width: 88px !important;
+      flex: 0 0 88px; justify-self: start;
+    }
+    .skills { grid-template-columns: 1fr max-content max-content; }
+
+    /* Saving throws compactness */
+    .saving-throws-grid .row { gap: 6px; }
+    .saving-throws-grid .mut { white-space: nowrap; }
+
+    /* Optional: tighten first card header spacing */
+    .left .card:first-child h2, .rightCol .card:first-child h2 { margin-top: 0; }
+  `;
+  style.textContent += `
+  /* Attacks table: header + rows share the same columns */
+  .attacks .header,
+  .attacks .rowGrid {
+    display: grid;
+    grid-template-columns: 1.2fr 100px 100px 1fr 1fr max-content; /* Attack | Range | Hit/DC | Damage | Notes | ✕ */
+    gap: 6px;
+    align-items: center;
+  }
+  .attacks .header {
+    color: var(--mut);
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+
+  /* Input+button inline for Hit/DC and Damage cells */
+  .attacks .cell-inline { display: flex; align-items: center; gap: 6px; }
+
+  /* Smaller dice buttons */
+  .attack-roll-btn {
+    padding: 2px 6px;
+    font-size: 12px;
+    line-height: 1;
+    border-radius: 6px;
+  }
 `;
-
+// Replace your previous Skills CSS block with this:
 style.textContent += `
-  /* Top bar with left actions (Roll/Load/Save) and right tabs */
-  .topbar {
-    display: flex;
-    justify-content: space-between;
+  /* Skills container should NOT be a grid */
+  .skillsTable { display: block; }
+
+  /* Header and each row share the same 3-column grid */
+  .skillsHeader,
+  .skillRow {
+    display: grid;
+    grid-template-columns: 1fr max-content max-content; /* Skill | Total | Prof */
+    gap: 6px 8px;
     align-items: center;
-    margin-bottom: 8px;
   }
-  .topbar .leftActions,
-  .topbar .rightActions {
+
+  .skillsHeader {
+    color: var(--mut);
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+
+  .skillRow .right { text-align: right; }
+
+  .skillTotalWrap {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
+    justify-content: flex-end;
   }
 
-  /* Tabs look exactly like .btn, active gets a subtle lift */
-  .tab.btn { /* already inherits .btn styles */ }
-  .tab.btn.active {
-    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-  }
-
-  /* Right column container (new class so we don't inherit global .right text-align) */
-  .rightCol { display: flex; flex-direction: column; min-width: 420px; }
-
-  /* The panel that holds whichever card is visible */
-  .rightPanel { display: flex; flex-direction: column; gap: 16px; }
-
-  /* Keep skill prof selects compact (from before) */
-  .skills select, .skills .sel {
+  /* Keep the small dropdowns compact */
+  .skillsTable select,
+  .skillsTable .sel {
     width: 88px !important; min-width: 88px !important; max-width: 88px !important;
     flex: 0 0 88px; justify-self: start;
   }
-  .skills { grid-template-columns: 1fr max-content max-content; }
-
-  /* Saving throws compactness (from before) */
-  .saving-throws-grid .row { gap: 6px; }
-  .saving-throws-grid .mut { white-space: nowrap; }
-
-  /* Optional: remove extra top space inside the very first cards */
-  .left .card:first-child h2, .rightCol .card:first-child h2 { margin-top: 0; }
 `;
 
+  document.head.appendChild(style);
 
+  // Build columns
+  var left  = h('div', { class: 'left' });
+  var right = h('div', { class: 'rightCol' });
 
-    document.head.appendChild(style);
-    // Build columns
-    var left = h('div', { class: 'left' });
-    var right = h('div', { class: 'rightCol' });
-    // Identity
-    var identity = h('div', { class: 'card' }, [
-        h('h2', {}, ['Identity']),
-        labeledInput('Name', 'name', ch.name, function (v) { return update({ name: v }); }),
-        h('div', { class: 'grid2' }, [
-            labeledInput('Class', 'class', ch.class, function (v) { return update({ class: v }); }),
-            labeledNumber('Level', 'level', ch.level, function (v) { return update({ level: clamp(v, 1, 20) }); }, 1, 20),
-        ]),
-        h('div', { class: 'grid3' }, [
-            labeledInput('Race', 'race', ch.race || '', function (v) { return update({ race: v }); }),
-            labeledInput('Background', 'background', ch.background || '', function (v) { return update({ background: v }); }),
-            labeledInput('Alignment', 'alignment', ch.alignment || '', function (v) { return update({ alignment: v }); }),
-        ]),
+  // Identity
+  var identity = h('div', { class: 'card' }, [
+    h('h2', {}, ['Identity']),
+    labeledInput('Name', 'name', ch.name, function (v) { return update({ name: v }); }),
+    h('div', { class: 'grid2' }, [
+      labeledInput('Class', 'class', ch.class, function (v) { return update({ class: v }); }),
+      labeledNumber('Level', 'level', ch.level, function (v) { return update({ level: clamp(v, 1, 20) }); }, 1, 20),
+    ]),
+    h('div', { class: 'grid3' }, [
+      labeledInput('Race', 'race', ch.race || '', function (v) { return update({ race: v }); }),
+      labeledInput('Background', 'background', ch.background || '', function (v) { return update({ background: v }); }),
+      labeledInput('Alignment', 'alignment', ch.alignment || '', function (v) { return update({ alignment: v }); }),
+    ]),
+  ]);
+
+  // Abilities + Saves
+  var abilities = h('div', { class: 'card' });
+  abilities.appendChild(h('h2', {}, ['Abilities']));
+  var abilWrap = h('div', { class: 'grid3' });
+  ABILITIES.forEach(function (a) {
+    var score = labeledNumber(`${a} (mod ${fmtSigned(derived.mods[a])})`, `abil.${a}`, ch.abilities[a],
+      function (v) { return updateDeep(`abilities.${a}`, clamp(v, 1, 30)); }, 1, 30);
+    score.setAttribute('data-ability', a);
+    abilWrap.appendChild(score);
+  });
+  abilities.appendChild(abilWrap);
+
+  var saves = h('div', { class: 'card' });
+  saves.appendChild(h('h2', {}, ['Saving Throws']));
+  var saveGrid = h('div', { class: 'grid3 saving-throws-grid' });
+  ABILITIES.forEach(function (a) {
+    var row = h('div', { class: 'row chip' }, [
+      h('input', { type: 'checkbox', checked: !!ch.savingThrowsProficiencies[a] }),
+      h('div', {}, [`${a} save`]),
+      h('div', { class: 'mut' }, [h('span', { id: `save.total.${a}` }, [fmtSigned(derived.savingThrows[a])])]),
     ]);
-    // Abilities + Saves
-    var abilities = h('div', { class: 'card' });
-    abilities.appendChild(h('h2', {}, ['Abilities']));
-    var abilWrap = h('div', { class: 'grid3' });
-    ABILITIES.forEach(function (a) {
-        var score = labeledNumber("".concat(a, " (mod ").concat(fmtSigned(derived.mods[a]), ")"), "abil.".concat(a), ch.abilities[a], function (v) { return updateDeep("abilities.".concat(a), clamp(v, 1, 30)); }, 1, 30);
-        score.setAttribute('data-ability', a);
-        abilWrap.appendChild(score);
+    row.firstChild.addEventListener('change', function (ev) {
+      var on = ev.target.checked;
+      updateDeep(`savingThrowsProficiencies.${a}`, on);
     });
-    abilities.appendChild(abilWrap);
-    var saves = h('div', { class: 'card' });
-    saves.appendChild(h('h2', {}, ['Saving Throws']));
-    // var saveGrid = h('div', { class: 'grid3' });
-    var saveGrid = h('div', { class: 'grid3 saving-throws-grid' });
+    saveGrid.appendChild(row);
+  });
+  saves.appendChild(saveGrid);
 
-    ABILITIES.forEach(function (a) {
-        var row = h('div', { class: 'row chip' }, [
-            h('input', { type: 'checkbox', checked: !!ch.savingThrowsProficiencies[a] }),
-            h('div', {}, ["".concat(a, " save")]),
-            h('div', { class: 'mut' }, [h('span', { id: "save.total.".concat(a) }, [fmtSigned(derived.savingThrows[a])])]),
-        ]);
-        row.firstChild.addEventListener('change', function (ev) {
-            var on = ev.target.checked;
-            updateDeep("savingThrowsProficiencies.".concat(a), on);
-        });
-        saveGrid.appendChild(row);
-    });
-    saves.appendChild(saveGrid);
-    // Combat
-    var combat = h('div', { class: 'card' }, [
-        h('h2', {}, ['Combat']),
-        h('div', { class: 'grid3' }, [
-            labeledNumber('Armor Class', 'ac', ch.armorClass, function (v) { return update({ armorClass: clamp(v, 0, 40) }); }, 0, 40),
-            labeledNumber('HP (max)', 'hp.max', ch.maxHP, function (v) { return update({ maxHP: Math.max(1, v) }); }, 1),
-            labeledNumber('HP (current)', 'hp.cur', ch.currentHP, function (v) { return update({ currentHP: clamp(v, 0, ch.maxHP) }); }, 0),
-        ]),
-        h('div', { class: 'grid3', style: { marginTop: '6px' } }, [
-            labeledInput('Speed', 'speed', ch.speed || '', function (v) { return update({ speed: v }); }),
-            labeledNumber('Temp HP', 'hp.temp', ch.tempHP || 0, function (v) { return update({ tempHP: Math.max(0, v) }); }, 0),
-            h('label', { class: 'lbl' }, [
-                h('div', { class: 'lblt' }, ['Initiative']),
-                h('div', { class: 'chip' }, [h('span', { id: 'derived.initiative' }, [fmtSigned(derived.initiative)]), ' (DEX mod)']),
-            ]),
-        ]),
-        h('div', { class: 'row', style: { marginTop: '6px' } }, [
-            h('div', { class: 'chip' }, ['Prof bonus: ', h('strong', { id: 'derived.pb' }, [fmtSigned(derived.proficiencyBonus)])]),
-            h('div', { class: 'chip' }, ['Passive Perception: ', h('strong', { id: 'derived.pp' }, [String(derived.passivePerception)])]),
-        ]),
-    ]);
-    // Left column assembly
-    left.appendChild(identity);
-    left.appendChild(abilities);
-    left.appendChild(saves);
-    left.appendChild(combat);
-    // Skills
+  // Combat
+  var combat = h('div', { class: 'card' }, [
+    h('h2', {}, ['Combat']),
+    h('div', { class: 'grid3' }, [
+      labeledNumber('Armor Class', 'ac', ch.armorClass, function (v) { return update({ armorClass: clamp(v, 0, 40) }); }, 0, 40),
+      labeledNumber('HP (max)', 'hp.max', ch.maxHP, function (v) { return update({ maxHP: Math.max(1, v) }); }, 1),
+      labeledNumber('HP (current)', 'hp.cur', ch.currentHP, function (v) { return update({ currentHP: clamp(v, 0, ch.maxHP) }); }, 0),
+    ]),
+    h('div', { class: 'grid3', style: { marginTop: '6px' } }, [
+      labeledInput('Speed', 'speed', ch.speed || '', function (v) { return update({ speed: v }); }),
+      labeledNumber('Temp HP', 'hp.temp', ch.tempHP || 0, function (v) { return update({ tempHP: Math.max(0, v) }); }, 0),
+      h('label', { class: 'lbl' }, [
+        h('div', { class: 'lblt' }, ['Initiative']),
+        h('div', { class: 'chip' }, [h('span', { id: 'derived.initiative' }, [fmtSigned(derived.initiative)]), ' (DEX mod)']),
+      ]),
+    ]),
+    h('div', { class: 'row', style: { marginTop: '6px' } }, [
+      h('div', { class: 'chip' }, ['Prof bonus: ', h('strong', { id: 'derived.pb' }, [fmtSigned(derived.proficiencyBonus)])]),
+      h('div', { class: 'chip' }, ['Passive Perception: ', h('strong', { id: 'derived.pp' }, [String(derived.passivePerception)])]),
+    ]),
+  ]);
+
+  // Left column assembly
+  left.appendChild(identity);
+  left.appendChild(abilities);
+  left.appendChild(saves);
+  left.appendChild(combat);
+
+  // Right-side cards
+    //Skills tab
     var skillsCard = h('div', { class: 'card' });
     skillsCard.appendChild(h('h2', {}, ['Skills']));
-    var skillGrid = h('div', { class: 'skills' });
-    // header
-    skillGrid.appendChild(h('div', { class: 'skillHead' }, ['Skill']));
-    skillGrid.appendChild(h('div', { class: 'skillHead right' }, ['Total']));
-    skillGrid.appendChild(h('div', { class: 'skillHead' }, ['Prof']));
+
+    var skillsTable = h('div', { class: 'skillsTable' });
+
+    // Header row (three actual cells)
+    var skillsHeader = h('div', { class: 'skillsHeader' }, [
+    h('div', {}, ['Skill']),
+    h('div', { class: 'right' }, ['Total']),
+    h('div', {}, ['Prof']),
+    ]);
+    skillsTable.appendChild(skillsHeader);
+
+    // Rows
     SKILLS.forEach(function (sk) {
-        var abil = SKILL_TO_ABILITY[sk];
-        // name + (ability)
-        skillGrid.appendChild(h('div', {}, ["".concat(sk, " "), h('span', { class: 'mut' }, ["(".concat(abil, ")")])]));
-        // total
-        var totalEl = h('div', { id: "skill.total.".concat(sk), class: 'right' }, [fmtSigned(derived.skills[sk])]);
-        var rollBtn = h('button', { class: 'btn small', title: 'Roll skill' }, ['🎲']);
-        var totalWrap = h('div', { class: 'row', style: { justifyContent: 'flex-end' } }, [totalEl, rollBtn]);
-        skillGrid.appendChild(totalWrap);
-        rollBtn.addEventListener('click', function () {
-            // Prefer host to roll if present; otherwise local roll
-            if (api)
-                api.postMessage({ type: 'roll', expr: "1d20".concat(signed(derived.skills[sk])) });
-            else {
-                var r = rollExpr("1d20".concat(signed(derived.skills[sk])));
-                setStatus("Roll ".concat(sk, ": ").concat(r.total, " (").concat(r.detail, ")"), 4000);
-            }
-        });
-        // prof select
-        var sel = selectProf(ch.skillsProficiencies[sk] || 'none', function (p) { return updateDeep("skillsProficiencies.".concat(sk), p); });
-        skillGrid.appendChild(sel);
+    var abil = SKILL_TO_ABILITY[sk];
+
+    // name cell: "Stealth (DEX)"
+    var nameCell = h('div', {}, [
+        `${sk} `,
+        h('span', { class: 'mut' }, [`(${abil})`])
+    ]);
+
+    // total cell: value + tiny roll button
+    var totalEl  = h('div', { id: `skill.total.${sk}`, class: 'right' }, [fmtSigned(derived.skills[sk])]);
+    var rollBtn  = h('button', { class: 'btn small', title: 'Roll skill' }, ['🎲']);
+    var totalWrap = h('div', { class: 'skillTotalWrap' }, [totalEl, rollBtn]);
+
+    rollBtn.addEventListener('click', function () {
+        var expr = `1d20${signed(derived.skills[sk])}`;
+        if (api) api.postMessage({ type: 'roll', expr });
+        else {
+        var r = rollExpr(expr);
+        setStatus(`Roll ${sk}: ${r.total} (${r.detail})`, 4000);
+        }
     });
-    skillsCard.appendChild(skillGrid);
-    // Attacks
-    var attacksCard = h('div', { class: 'card attacks' });
-    attacksCard.appendChild(h('h2', {}, ['Attacks']));
-    var hdr = h('div', { class: 'hdr' }, ['Name', 'To Hit', 'Damage', '']);
-    var list = h('div', { id: 'attacks.list' });
-    var addBtn = h('button', { class: 'btn', style: { marginTop: '8px' } }, ['+ Add attack']);
+
+    // prof select
+    var sel = selectProf(ch.skillsProficiencies[sk] || 'none',
+        function (p) { return updateDeep(`skillsProficiencies.${sk}`, p); });
+
+    // assemble row (three cells)
+    var row = h('div', { class: 'skillRow' }, [nameCell, totalWrap, sel]);
+    skillsTable.appendChild(row);
+    });
+
+    skillsCard.appendChild(skillsTable);
+
+//   skillsCard.appendChild(skillGrid);
+
+ // Attacks Tab
+  var attacksCard = h('div', { class: 'card attacks' });
+  attacksCard.appendChild(h('h2', {}, ['Attacks']));
+  var list = h('div', { id: 'attacks.list' });
+  var addBtn = h('button', { class: 'btn', style: { marginTop: '8px' } }, ['+ Add attack']);
     addBtn.addEventListener('click', function () {
-        ch.attacks.push({ name: 'New Attack', toHit: '+0', damage: '1d4', notes: '' });
-        derived = computeDerived(ch);
-        renderAttacks();
+    ch.attacks.push({ name: 'New Attack', range: 'Melee', hitDc: '+0', damage: '1d6+2', notes: '' });
+    derived = computeDerived(ch);
+    renderAttacks();
     });
-    attacksCard.appendChild(hdr);
-    attacksCard.appendChild(list);
-    attacksCard.appendChild(addBtn);
-    // Notes
-    var notesCard = h('div', { class: 'card' }, [
-        h('h2', {}, ['Notes']),
-        (function () {
-            var ta = h('textarea', { value: ch.notes || '' });
-            ta.addEventListener('input', function () { return update({ notes: ta.value }); });
-            return ta;
-        })(),
-    ]);
-    // --- Right column assembly (REPLACE this whole block) ---
+  attacksCard.appendChild(list);
+  attacksCard.appendChild(addBtn);
 
-    // // Build the cards exactly as you already do:
-    // var skillsCard  = /* …same as your code… */;
-    // var attacksCard = /* …same as your code… */;
-    // var notesCard   = /* …same as your code… */;
+  var notesCard = h('div', { class: 'card' }, [
+    h('h2', {}, ['Notes']),
+    (function () {
+      var ta = h('textarea', { value: ch.notes || '' });
+      ta.addEventListener('input', function () { return update({ notes: ta.value }); });
+      return ta;
+    })(),
+  ]);
 
-    // Tag them so we can toggle:
-    skillsCard.setAttribute('data-panel', 'skills');
-    attacksCard.setAttribute('data-panel', 'attacks');
-    notesCard.setAttribute('data-panel', 'notes');
+  // Tag right-side cards so we can toggle
+  skillsCard.setAttribute('data-panel', 'skills');
+  attacksCard.setAttribute('data-panel', 'attacks');
+  notesCard.setAttribute('data-panel', 'notes');
 
-    // Tabs + panel shell
-    var tabs = h('div', { class: 'rightTabs' }, [
-    h('button', { class: 'btn tab active', 'data-target': 'skills' }, ['Skills']),
-    h('button', { class: 'btn tab', 'data-target': 'attacks' }, ['Attacks']),
-    h('button', { class: 'btn tab', 'data-target': 'notes' }, ['Notes']),
-    // add more tabs later: Spells, Inventory, etc.
-    ]);
+  // Panel shell (only the panel goes in the right column)
+  var panel = h('div', { class: 'rightPanel' });
+  panel.appendChild(skillsCard);
+  panel.appendChild(attacksCard);
+  panel.appendChild(notesCard);
+  right.innerHTML = '';
+  right.appendChild(panel);
 
-    var panel = h('div', { class: 'rightPanel' });
+  // Build top bar
+  var leftActions = h('div', { class: 'leftActions' }, [
+    h('button', { class: 'btn', id: 'btn.roll' }, ['Roll d20']),
+    h('button', { class: 'btn', id: 'btn.load' }, ['Load']),
+    h('button', { class: 'btn', id: 'btn.save' }, ['Save']),
+    h('div', { id: 'status', class: 'status' }, ['']),
+  ]);
+  var rightActions = h('div', { class: 'rightActions' }, [
+    h('button', { class: 'btn tab active', 'data-target': 'skills'  }, ['Skills']),
+    h('button', { class: 'btn tab',         'data-target': 'attacks' }, ['Attacks']),
+    h('button', { class: 'btn tab',         'data-target': 'notes'   }, ['Notes']),
+  ]);
+  var topbar = h('div', { class: 'topbar' }, [leftActions, rightActions]);
 
-    // Start with Skills visible
-    panel.appendChild(skillsCard);
-    panel.appendChild(attacksCard);
-    panel.appendChild(notesCard);
+  // Mount
+  root.innerHTML = '';
+  var wrap = h('div', { class: 'wrap' });
+  wrap.appendChild(topbar);
+  var cols = h('div', { class: 'cols' }, [left, right]);
+  wrap.appendChild(cols);
+  root.appendChild(wrap);
 
-    // Simple show/hide
-    function showPanel(which) {
-    // toggle active tab
-    Array.from(tabs.querySelectorAll('.tab')).forEach(btn =>
-        btn.classList.toggle('active', btn.getAttribute('data-target') === which)
+  // Show/hide logic for right-side panel
+  function showPanel(which) {
+    Array.from(rightActions.querySelectorAll('.tab')).forEach(btn =>
+      btn.classList.toggle('active', btn.getAttribute('data-target') === which)
     );
-    // show only the requested card
     Array.from(panel.children).forEach(el =>
-        el.style.display = (el.getAttribute('data-panel') === which) ? '' : 'none'
+      el.style.display = (el.getAttribute('data-panel') === which) ? '' : 'none'
     );
-    }
-
-    // Wire tab clicks
-    tabs.addEventListener('click', (e) => {
+  }
+  rightActions.addEventListener('click', function (e) {
     var btn = e.target.closest('.tab');
     if (!btn) return;
     showPanel(btn.getAttribute('data-target'));
-    });
+  });
+  showPanel('skills');
 
-    // Assemble right column
-    right.innerHTML = '';          // clear
-    right.appendChild(tabs);
-    right.appendChild(panel);
-
-    // AFTER mounting everything, call once:
-    showPanel('skills');
-
-    // // Right column assembly
-    // right.appendChild(skillsCard);
-    // right.appendChild(attacksCard);
-    // right.appendChild(notesCard);
-    // Top controls
-    var topRow = h('div', { class: 'row', style: { marginBottom: '8px' } }, [
-        h('button', { class: 'btn', id: 'btn.roll' }, ['Roll d20']),
-        h('button', { class: 'btn', id: 'btn.load' }, ['Load']),
-        h('button', { class: 'btn', id: 'btn.save' }, ['Save']),
-        h('div', { id: 'status', class: 'status' }, ['']),
-    ]);
-    // Mount
-    root.innerHTML = '';
-    var wrap = h('div', { class: 'wrap' });
-    wrap.appendChild(topRow);
-    var cols = h('div', { class: 'cols' }, [left, right]);
-    wrap.appendChild(cols);
-    root.appendChild(wrap);
-    // Wire top buttons
-    document.getElementById('btn.roll').addEventListener('click', function () {
-        if (api)
-            api.postMessage({ type: 'roll', expr: '1d20' });
-        else {
-            var r = rollExpr('1d20');
-            setStatus("Roll d20: ".concat(r.total, " (").concat(r.detail, ")"), 3000);
-        }
-    });
-    document.getElementById('btn.save').addEventListener('click', function () {
-        if (api)
-            api.postMessage({ type: 'save', character: ch });
-        else {
-            saveLocal(ch);
-            setStatus('Saved locally ✓');
-        }
-    });
-    document.getElementById('btn.load').addEventListener('click', function () {
+  // Wire top buttons
+  document.getElementById('btn.roll').addEventListener('click', function () {
+    if (api) api.postMessage({ type: 'roll', expr: '1d20' });
+    else {
+      var r = rollExpr('1d20');
+      setStatus(`Roll d20: ${r.total} (${r.detail})`, 3000);
+    }
+  });
+  document.getElementById('btn.save').addEventListener('click', function () {
+    if (api) api.postMessage({ type: 'save', character: ch });
+    else {
+      saveLocal(ch);
+      setStatus('Saved locally ✓');
+    }
+  });
+  document.getElementById('btn.load').addEventListener('click', function () {
     if (api) {
-      // Ask host (index.ts) to read the current note and send back {type:'data', ...}
       api.postMessage({ type: 'load' });
       setStatus('Loading…');
     } else {
-        setStatus('Nothing to load (offline)');
-      }
-    
+      setStatus('Nothing to load (offline)');
+    }
   });
-    // Initial renders that depend on state
-    renderAttacks();
-    renderDynamic();
+
+  // Initial renders that depend on state
+  renderAttacks();
+  renderDynamic();
 }
+
+// function renderAttacks() {
+//     var list = document.getElementById('attacks.list');
+//     if (!list)
+//         return;
+//     list.innerHTML = '';
+//     ch.attacks.forEach(function (atk, i) {
+//         var row = h('div', { class: 'row' });
+//         var grid = h('div', { class: 'row', style: { width: '100%' } }, [
+//         // use the same 1fr 120px 1fr 28px grid as header
+//         ]);
+//         var name = h('input', { class: 'inp', value: atk.name });
+//         var toHit = h('input', { class: 'inp', value: atk.toHit });
+//         var dmg = h('input', { class: 'inp', value: atk.damage });
+//         var del = h('button', { class: 'btn small', title: 'Remove' }, ['✕']);
+//         name.addEventListener('input', function () { ch.attacks[i].name = name.value; });
+//         toHit.addEventListener('input', function () { ch.attacks[i].toHit = toHit.value; });
+//         dmg.addEventListener('input', function () { ch.attacks[i].damage = dmg.value; });
+//         del.addEventListener('click', function () { ch.attacks.splice(i, 1); renderAttacks(); });
+//         var gridWrap = h('div', { class: 'hdr' }, [name, toHit, dmg, del]);
+//         list.appendChild(gridWrap);
+//     });
+// }
+// tiny helper to mirror your Combat labels
+function labeledWrap(label, child) {
+  return h('label', { class: 'lbl' }, [
+    h('div', { class: 'lblt' }, [label]),
+    child,
+  ]);
+}
+
 function renderAttacks() {
-    var list = document.getElementById('attacks.list');
-    if (!list)
-        return;
-    list.innerHTML = '';
-    ch.attacks.forEach(function (atk, i) {
-        var row = h('div', { class: 'row' });
-        var grid = h('div', { class: 'row', style: { width: '100%' } }, [
-        // use the same 1fr 120px 1fr 28px grid as header
-        ]);
-        var name = h('input', { class: 'inp', value: atk.name });
-        var toHit = h('input', { class: 'inp', value: atk.toHit });
-        var dmg = h('input', { class: 'inp', value: atk.damage });
-        var del = h('button', { class: 'btn small', title: 'Remove' }, ['✕']);
-        name.addEventListener('input', function () { ch.attacks[i].name = name.value; });
-        toHit.addEventListener('input', function () { ch.attacks[i].toHit = toHit.value; });
-        dmg.addEventListener('input', function () { ch.attacks[i].damage = dmg.value; });
-        del.addEventListener('click', function () { ch.attacks.splice(i, 1); renderAttacks(); });
-        var gridWrap = h('div', { class: 'hdr' }, [name, toHit, dmg, del]);
-        list.appendChild(gridWrap);
+  var list = document.getElementById('attacks.list');
+  if (!list) return;
+  list.innerHTML = '';
+
+  ch.attacks.forEach(function (atk, i) {
+    // Back-compat: use toHit if hitDc not present
+    var hitDcVal = (atk.hitDc != null ? String(atk.hitDc) : (atk.toHit != null ? String(atk.toHit) : '+0'));
+    var dmgVal   = (atk.damage != null ? String(atk.damage) : '1d4');
+    var rangeVal = (atk.range  != null ? String(atk.range)  : '');
+
+    // Inputs
+    var name  = h('input', { class: 'inp', value: atk.name || '' });
+    var range = h('input', { class: 'inp', value: rangeVal });
+
+    var hitDcInput = h('input', { class: 'inp', value: hitDcVal, title: 'Enter modifier (e.g. +5). Double-click/Enter or 🎲 to roll' });
+    var hitBtn = h('button', { class: 'btn attack-roll-btn', title: 'Roll Hit/DC' }, ['🎲']);
+    var hitWrap = h('div', { class: 'cell-inline' }, [hitDcInput, hitBtn]);
+
+    var dmgInput = h('input', { class: 'inp', value: dmgVal, title: 'Composite damage like 2d6+1d4+3' });
+    var dmgBtn = h('button', { class: 'btn attack-roll-btn', title: 'Roll Damage' }, ['🎲']);
+    var dmgWrap = h('div', { class: 'cell-inline' }, [dmgInput, dmgBtn]);
+
+    var notes = h('input', { class: 'inp', value: atk.notes || '' });
+    var del   = h('button', { class: 'btn small', title: 'Remove' }, ['✕']);
+
+    // Persist on input
+    name.addEventListener('input',  function () { ch.attacks[i].name  = name.value; });
+    range.addEventListener('input', function () { ch.attacks[i].range = range.value; });
+    hitDcInput.addEventListener('input', function () {
+      ch.attacks[i].hitDc = hitDcInput.value;
+      ch.attacks[i].toHit = hitDcInput.value; // keep legacy field updated
     });
+    dmgInput.addEventListener('input', function () { ch.attacks[i].damage = dmgInput.value; });
+    notes.addEventListener('input', function () { ch.attacks[i].notes  = notes.value; });
+    del.addEventListener('click',   function () { ch.attacks.splice(i, 1); renderAttacks(); });
+
+    // Roll handlers
+    function rollHit() {
+      var mod = parseInt(String(hitDcInput.value).replace(/\s+/g, ''), 10);
+      if (!Number.isFinite(mod)) mod = 0;
+      var expr = `1d20${mod >= 0 ? '+'+mod : mod}`;
+      if (api) api.postMessage({ type: 'roll', expr });
+      else {
+        var r = rollExpr(expr);
+        setStatus(`Hit/DC (${atk.name || 'Attack'}): ${r.total} (${r.detail})`, 4000);
+      }
+    }
+    function rollDamage() {
+    var exprIn = String(dmgInput.value || '0');
+    var r = rollCompositeDamage(exprIn);
+
+    // If the host can understand this (simple NdM±K), let it roll; otherwise show our local result.
+    if (api && r.exprForHost) {
+        api.postMessage({ type: 'roll', expr: r.exprForHost });
+    } else {
+        setStatus(`Damage (${atk.name || 'Attack'}): ${r.total} (${r.detail})`, 4000);
+    }
+    }
+    hitBtn.addEventListener('click', rollHit);
+    dmgBtn.addEventListener('click', rollDamage);
+    hitDcInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') rollHit(); });
+    hitDcInput.addEventListener('dblclick', rollHit);
+    dmgInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') rollDamage(); });
+    dmgInput.addEventListener('dblclick', rollDamage);
+
+    // Row grid with labeled cells (like Combat)
+    var row = h('div', { class: 'rowGrid' }, [
+      labeledWrap('Attack', name),
+      labeledWrap('Range',  range),
+      labeledWrap('Hit/DC', hitWrap),
+      labeledWrap('Damage', dmgWrap),
+      labeledWrap('Notes',  notes),
+      del,
+    ]);
+
+    list.appendChild(row);
+  });
 }
+
+
 function renderDynamic() {
     // Update ability labels (mods)
     ABILITIES.forEach(function (a) {
