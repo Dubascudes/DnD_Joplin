@@ -281,6 +281,8 @@ function defaultCharacter() {
         savingThrowsProficiencies: {},
         skillsProficiencies: baseSkills,
         attacks: [],
+        spells: [],            // <— NEW
+        inventory: [],         // <— NEW
         notes: '',
     };
 }
@@ -550,6 +552,27 @@ style.textContent += `
     flex: 0 0 88px; justify-self: start;
   }
 `;
+style.textContent += `
+  /* Spells table mirrors Attacks */
+  .spells .header,
+  .spells .rowGrid {
+    display: grid;
+    grid-template-columns: 1.2fr 100px 100px 1fr 1fr max-content; /* Spell | Range | Hit/DC | Damage | Notes | ✕ */
+    gap: 6px;
+    align-items: center;
+  }
+  .spells .header { color: var(--mut); font-size: 12px; margin-bottom: 6px; }
+
+  /* Inventory table */
+  .inventory .header,
+  .inventory .rowGrid {
+    display: grid;
+    grid-template-columns: 1.2fr 120px 2fr max-content; /* Name | Value | Description | ✕ */
+    gap: 6px;
+    align-items: center;
+  }
+  .inventory .header { color: var(--mut); font-size: 12px; margin-bottom: 6px; }
+`;
 
   document.head.appendChild(style);
 
@@ -703,18 +726,52 @@ style.textContent += `
     })(),
   ]);
 
+
+    // Spells Tab (modeled after Attacks)
+  var spellsCard = h('div', { class: 'card spells' });
+  spellsCard.appendChild(h('h2', {}, ['Spells']));
+  var spellsList = h('div', { id: 'spells.list' });
+  var addSpellBtn = h('button', { class: 'btn', style: { marginTop: '8px' } }, ['+ Add spell']);
+  addSpellBtn.addEventListener('click', function () {
+    ch.spells.push({ name: 'New Spell', range: '30 ft', hitDc: '+0', damage: '1d6', notes: '' });
+    derived = computeDerived(ch);
+    renderSpells();
+  });
+  spellsCard.appendChild(spellsList);
+  spellsCard.appendChild(addSpellBtn);
+
+  // Inventory Tab
+  var inventoryCard = h('div', { class: 'card inventory' });
+  inventoryCard.appendChild(h('h2', {}, ['Inventory']));
+  var inventoryList = h('div', { id: 'inventory.list' });
+  var addItemBtn = h('button', { class: 'btn', style: { marginTop: '8px' } }, ['+ Add item']);
+  addItemBtn.addEventListener('click', function () {
+    ch.inventory.push({ name: 'New Item', value: '', desc: '' });
+    renderInventory();
+  });
+  inventoryCard.appendChild(inventoryList);
+  inventoryCard.appendChild(addItemBtn);
   // Tag right-side cards so we can toggle
   skillsCard.setAttribute('data-panel', 'skills');
   attacksCard.setAttribute('data-panel', 'attacks');
   notesCard.setAttribute('data-panel', 'notes');
-
+  spellsCard.setAttribute('data-panel', 'spells');       // NEW
+  inventoryCard.setAttribute('data-panel', 'inventory'); // NEW
   // Panel shell (only the panel goes in the right column)
   var panel = h('div', { class: 'rightPanel' });
   panel.appendChild(skillsCard);
   panel.appendChild(attacksCard);
   panel.appendChild(notesCard);
+  panel.appendChild(spellsCard);      // <— NEW
+  panel.appendChild(inventoryCard);   // <— NEW
   right.innerHTML = '';
   right.appendChild(panel);
+
+
+
+
+
+
 
   // Build top bar
   var leftActions = h('div', { class: 'leftActions' }, [
@@ -723,11 +780,15 @@ style.textContent += `
     h('button', { class: 'btn', id: 'btn.save' }, ['Save']),
     h('div', { id: 'status', class: 'status' }, ['']),
   ]);
+
   var rightActions = h('div', { class: 'rightActions' }, [
-    h('button', { class: 'btn tab active', 'data-target': 'skills'  }, ['Skills']),
-    h('button', { class: 'btn tab',         'data-target': 'attacks' }, ['Attacks']),
-    h('button', { class: 'btn tab',         'data-target': 'notes'   }, ['Notes']),
-  ]);
+  h('button', { class: 'btn tab active', 'data-target': 'skills'    }, ['Skills']),
+  h('button', { class: 'btn tab',         'data-target': 'attacks'   }, ['Attacks']),
+  h('button', { class: 'btn tab',         'data-target': 'spells'    }, ['Spells']),     // <— NEW
+  h('button', { class: 'btn tab',         'data-target': 'inventory' }, ['Inventory']),  // <— NEW
+  h('button', { class: 'btn tab',         'data-target': 'notes'     }, ['Notes']),
+]);
+
   var topbar = h('div', { class: 'topbar' }, [leftActions, rightActions]);
 
   // Mount
@@ -778,33 +839,110 @@ style.textContent += `
     }
   });
 
-  // Initial renders that depend on state
   renderAttacks();
+  renderSpells();      // <— NEW
+  renderInventory();   // <— NEW
   renderDynamic();
+
+}
+function renderSpells() {
+  var list = document.getElementById('spells.list');
+  if (!list) return;
+  list.innerHTML = '';
+
+  ch.spells.forEach(function (sp, i) {
+    var hitDcVal = (sp.hitDc != null ? String(sp.hitDc) : '+0');
+    var dmgVal   = (sp.damage != null ? String(sp.damage) : '1d6');
+    var rangeVal = (sp.range  != null ? String(sp.range)  : '');
+
+    var name  = h('input', { class: 'inp', value: sp.name || '' });
+    var range = h('input', { class: 'inp', value: rangeVal });
+
+    var hitDcInput = h('input', { class: 'inp', value: hitDcVal, title: 'Enter modifier (e.g. +5). Double-click/Enter or 🎲 to roll' });
+    var hitBtn = h('button', { class: 'btn attack-roll-btn', title: 'Roll Hit/DC' }, ['🎲']);
+    var hitWrap = h('div', { class: 'cell-inline' }, [hitDcInput, hitBtn]);
+
+    var dmgInput = h('input', { class: 'inp', value: dmgVal, title: 'Composite damage like 2d6+1d4+3' });
+    var dmgBtn = h('button', { class: 'btn attack-roll-btn', title: 'Roll Damage' }, ['🎲']);
+    var dmgWrap = h('div', { class: 'cell-inline' }, [dmgInput, dmgBtn]);
+
+    var notes = h('input', { class: 'inp', value: sp.notes || '' });
+    var del   = h('button', { class: 'btn small', title: 'Remove' }, ['✕']);
+
+    name.addEventListener('input',  function () { ch.spells[i].name  = name.value; });
+    range.addEventListener('input', function () { ch.spells[i].range = range.value; });
+    hitDcInput.addEventListener('input', function () { ch.spells[i].hitDc = hitDcInput.value; });
+    dmgInput.addEventListener('input', function () { ch.spells[i].damage = dmgInput.value; });
+    notes.addEventListener('input', function () { ch.spells[i].notes  = notes.value; });
+    del.addEventListener('click',   function () { ch.spells.splice(i, 1); renderSpells(); });
+
+    function rollHit() {
+      var mod = parseInt(String(hitDcInput.value).replace(/\s+/g, ''), 10);
+      if (!Number.isFinite(mod)) mod = 0;
+      var expr = `1d20${mod >= 0 ? '+'+mod : mod}`;
+      if (api) api.postMessage({ type: 'roll', expr });
+      else {
+        var r = rollExpr(expr);
+        setStatus(`Spell Hit/DC (${sp.name || 'Spell'}): ${r.total} (${r.detail})`, 4000);
+      }
+    }
+    function rollDamage() {
+      var exprIn = String(dmgInput.value || '0');
+      var r = rollCompositeDamage(exprIn);
+      if (api && r.exprForHost) {
+        api.postMessage({ type: 'roll', expr: r.exprForHost });
+      } else {
+        setStatus(`Spell Damage (${sp.name || 'Spell'}): ${r.total} (${r.detail})`, 4000);
+      }
+    }
+    hitBtn.addEventListener('click', rollHit);
+    dmgBtn.addEventListener('click', rollDamage);
+    hitDcInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') rollHit(); });
+    hitDcInput.addEventListener('dblclick', rollHit);
+    dmgInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') rollDamage(); });
+    dmgInput.addEventListener('dblclick', rollDamage);
+
+    var row = h('div', { class: 'rowGrid' }, [
+      labeledWrap('Spell',  name),
+      labeledWrap('Range',  range),
+      labeledWrap('Hit/DC', hitWrap),
+      labeledWrap('Damage', dmgWrap),
+      labeledWrap('Notes',  notes),
+      del,
+    ]);
+
+    list.appendChild(row);
+  });
 }
 
-// function renderAttacks() {
-//     var list = document.getElementById('attacks.list');
-//     if (!list)
-//         return;
-//     list.innerHTML = '';
-//     ch.attacks.forEach(function (atk, i) {
-//         var row = h('div', { class: 'row' });
-//         var grid = h('div', { class: 'row', style: { width: '100%' } }, [
-//         // use the same 1fr 120px 1fr 28px grid as header
-//         ]);
-//         var name = h('input', { class: 'inp', value: atk.name });
-//         var toHit = h('input', { class: 'inp', value: atk.toHit });
-//         var dmg = h('input', { class: 'inp', value: atk.damage });
-//         var del = h('button', { class: 'btn small', title: 'Remove' }, ['✕']);
-//         name.addEventListener('input', function () { ch.attacks[i].name = name.value; });
-//         toHit.addEventListener('input', function () { ch.attacks[i].toHit = toHit.value; });
-//         dmg.addEventListener('input', function () { ch.attacks[i].damage = dmg.value; });
-//         del.addEventListener('click', function () { ch.attacks.splice(i, 1); renderAttacks(); });
-//         var gridWrap = h('div', { class: 'hdr' }, [name, toHit, dmg, del]);
-//         list.appendChild(gridWrap);
-//     });
-// }
+function renderInventory() {
+  var list = document.getElementById('inventory.list');
+  if (!list) return;
+  list.innerHTML = '';
+
+  ch.inventory.forEach(function (it, i) {
+    var name  = h('input', { class: 'inp', value: it.name || '' });
+    var value = h('input', { class: 'inp', value: it.value || '', placeholder: 'e.g., 25 gp' });
+    var desc  = h('input', { class: 'inp', value: it.desc || '' });
+    var del   = h('button', { class: 'btn small', title: 'Remove' }, ['✕']);
+
+    name.addEventListener('input',  function () { ch.inventory[i].name  = name.value; });
+    value.addEventListener('input', function () { ch.inventory[i].value = value.value; });
+    desc.addEventListener('input',  function () { ch.inventory[i].desc  = desc.value; });
+    del.addEventListener('click',   function () { ch.inventory.splice(i, 1); renderInventory(); });
+
+    var row = h('div', { class: 'rowGrid' }, [
+      labeledWrap('Item',        name),
+      labeledWrap('Value',       value),
+      labeledWrap('Description', desc),
+      del,
+    ]);
+
+    list.appendChild(row);
+  });
+}
+
+
 // tiny helper to mirror your Combat labels
 function labeledWrap(label, child) {
   return h('label', { class: 'lbl' }, [
@@ -1000,13 +1138,27 @@ function main() {
         });
     });
 }
+// function mergeCharacter(base, incoming) {
+//     var _a, _b, _c;
+//     var mergedAbilities = completeAbilities(__assign(__assign({}, base.abilities), ((_a = incoming.abilities) !== null && _a !== void 0 ? _a : {})));
+//     var mergedSkills = completeSkills(__assign(__assign({}, ((_b = base.skillsProficiencies) !== null && _b !== void 0 ? _b : {})), ((_c = incoming.skillsProficiencies) !== null && _c !== void 0 ? _c : {})));
+//     return __assign(__assign(__assign({}, base), incoming), { abilities: mergedAbilities, savingThrowsProficiencies: __assign(__assign({}, (base.savingThrowsProficiencies || {})), (incoming.savingThrowsProficiencies || {})), skillsProficiencies: mergedSkills, attacks: (incoming.attacks || base.attacks || []).map(function (a) { return (__assign({ name: '', toHit: '', damage: '', notes: '' }, a)); }) });
+// }
 function mergeCharacter(base, incoming) {
-    var _a, _b, _c;
-    var mergedAbilities = completeAbilities(__assign(__assign({}, base.abilities), ((_a = incoming.abilities) !== null && _a !== void 0 ? _a : {})));
-    var mergedSkills = completeSkills(__assign(__assign({}, ((_b = base.skillsProficiencies) !== null && _b !== void 0 ? _b : {})), ((_c = incoming.skillsProficiencies) !== null && _c !== void 0 ? _c : {})));
-    return __assign(__assign(__assign({}, base), incoming), { abilities: mergedAbilities, savingThrowsProficiencies: __assign(__assign({}, (base.savingThrowsProficiencies || {})), (incoming.savingThrowsProficiencies || {})), skillsProficiencies: mergedSkills, attacks: (incoming.attacks || base.attacks || []).map(function (a) { return (__assign({ name: '', toHit: '', damage: '', notes: '' }, a)); }) });
-}
+  const mergedAbilities = completeAbilities({ ...base.abilities, ...(incoming.abilities ?? {}) });
+  const mergedSkills = completeSkills({ ...(base.skillsProficiencies ?? {}), ...(incoming.skillsProficiencies ?? {}) });
 
+  return {
+    ...base,
+    ...incoming,
+    abilities: mergedAbilities,
+    savingThrowsProficiencies: { ...(base.savingThrowsProficiencies || {}), ...(incoming.savingThrowsProficiencies || {}) },
+    skillsProficiencies: mergedSkills,
+    attacks: (incoming.attacks || base.attacks || []).map(a => ({ name: '', toHit: '', damage: '', notes: '', ...a })),
+    spells: (incoming.spells || base.spells || []).map(s => ({ name: 'New Spell', range: '', hitDc: '+0', damage: '1d6', notes: '', ...s })), // <— NEW
+    inventory: (incoming.inventory || base.inventory || []).map(it => ({ name: 'New Item', value: '', desc: '', ...it })),                    // <— NEW
+  };
+}
 (function bootstrap() {
   function start() {
     try {
