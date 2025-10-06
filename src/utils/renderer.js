@@ -46,6 +46,21 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
+// ---- UI Layout (persisted) ----
+const UI_LAYOUT_KEY = 'dnd.character.editor.layout.v1';
+let layout = loadLayout() || {
+  columns: 2,
+  tiles: {
+    skills:    { visible: true, span: 1, height: 0 },
+    attacks:   { visible: true, span: 1, height: 0 },
+    spells:    { visible: true, span: 1, height: 0 },
+    inventory: { visible: true, span: 1, height: 0 },
+    notes:     { visible: true, span: 1, height: 0 },
+  },
+  order: ['skills','attacks','spells','inventory','notes'],
+};
+function loadLayout(){ try{ return JSON.parse(localStorage.getItem(UI_LAYOUT_KEY)||''); }catch{return null;} }
+function saveLayout(){ try{ localStorage.setItem(UI_LAYOUT_KEY, JSON.stringify(layout)); }catch{} }
 
 // ---- Types ----
 // Ensure we always have a full record for all skills
@@ -171,9 +186,18 @@ function computeDerived(ch) {
         acc[sk] = base + add;
         return acc;
     }, {});
+    const sc = ch.spellcasting || {};
+    const spellAbil = (sc.ability && ABILITIES.includes(sc.ability)) ? sc.ability : 'INT';
+    const spellMod = abilityMod(ch.abilities[spellAbil]);
+    const spellSaveDC  = 8 + spellMod + pb + (sc.miscSaveDC || 0);
+    const spellAtkMod  =      spellMod + pb + (sc.miscAttackMod || 0);
     var passivePerception = 10 + skills['Perception'];
     var initiative = mods.DEX;
-    return { mods: mods, proficiencyBonus: pb, skills: skills, savingThrows: savingThrows, passivePerception: passivePerception, initiative: initiative };
+    return { mods, proficiencyBonus: pb, skills, savingThrows, passivePerception, initiative,
+            spellSaveDC, spellAtkMod, spellAbility: spellAbil };
+
+
+    // return { mods: mods, proficiencyBonus: pb, skills: skills, savingThrows: savingThrows, passivePerception: passivePerception, initiative: initiative };
 }
 // Simple dice roller: "NdM+K" (N, K optional)
 function rollExpr(expr) {
@@ -284,6 +308,18 @@ function defaultCharacter() {
         spells: [],            // <— NEW
         inventory: [],         // <— NEW
         notes: '',
+        spellcasting: {
+        ability: 'NA',        // which ability drives spells
+        miscSaveDC: 0,         // extra to DC (item, feat, etc.)
+        miscAttackMod: 0,      // extra to attack mod
+        cantripsKnown: 0,
+        preparedSpells: 0,
+        slots: {               // per-level totals/used
+          1:{total:0, used:0}, 2:{total:0, used:0}, 3:{total:0, used:0},
+          4:{total:0, used:0}, 5:{total:0, used:0}, 6:{total:0, used:0},
+          7:{total:0, used:0}, 8:{total:0, used:0}, 9:{total:0, used:0},
+  },
+},
     };
 }
 function loadLocal() {
@@ -506,7 +542,7 @@ function buildUI() {
   }
 
   /* Input+button inline for Hit/DC and Damage cells */
-  .attacks .cell-inline { display: flex; align-items: center; gap: 6px; }
+  .cell-inline { display: flex; align-items: center; gap: 6px; }
 
   /* Smaller dice buttons */
   .attack-roll-btn {
@@ -564,15 +600,63 @@ style.textContent += `
   .spells .header { color: var(--mut); font-size: 12px; margin-bottom: 6px; }
 
   /* Inventory table */
-  .inventory .header,
-  .inventory .rowGrid {
+  .inventory .header {
     display: grid;
-    grid-template-columns: 1.2fr 120px 2fr max-content; /* Name | Value | Description | ✕ */
+    grid-template-columns: 1.2fr 120px max-content; /* Name | Value | ✕ */
     gap: 6px;
     align-items: center;
   }
   .inventory .header { color: var(--mut); font-size: 12px; margin-bottom: 6px; }
+  
+  .inventory .itemRow {
+    border: 1px solid var(--bd);
+    border-radius: 8px;
+    padding: 8px;
+    margin-bottom: 8px;
+    background: #fff;
+  }
+  
+  .inventory .itemTopRow {
+    display: grid;
+    grid-template-columns: 1.2fr 120px max-content; /* Name | Value | ✕ */
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  
+  .inventory .itemDescription {
+    width: 100%;
+    margin-top: 4px;
+  }
+  
+  .inventory .itemDescription textarea {
+    min-height: 60px;
+    resize: vertical;
+  }
 `;
+
+style.textContent += `
+.spellcasting { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.spellcasting .grid { display: grid; grid-template-columns: 60px 80px 80px 1fr; gap: 6px; align-items: center; }
+.spellcasting .hdr { color: var(--mut); font-size: 12px; }
+.slotDots { display:flex; flex-wrap: wrap; gap: 4px; }
+.dot { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--bd); display:inline-flex; align-items:center; justify-content:center; cursor:pointer; font-size:10px; user-select:none; }
+.dot.on  { background:#222; color:#fff; }
+.dot.off { background:#fff; }
+.inline { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+`;
+
+style.textContent += `
+.spellcasting { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.spellcasting .grid { display: grid; grid-template-columns: 60px 80px 80px 1fr; gap: 6px; align-items: center; }
+.spellcasting .hdr { color: var(--mut); font-size: 12px; }
+.slotDots { display:flex; flex-wrap: wrap; gap: 4px; }
+.dot { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--bd); display:inline-flex; align-items:center; justify-content:center; cursor:pointer; font-size:10px; user-select:none; }
+.dot.on  { background:#222; color:#fff; }
+.dot.off { background:#fff; }
+.inline { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+`;
+
 
   document.head.appendChild(style);
 
@@ -730,6 +814,115 @@ style.textContent += `
     // Spells Tab (modeled after Attacks)
   var spellsCard = h('div', { class: 'card spells' });
   spellsCard.appendChild(h('h2', {}, ['Spells']));
+
+    // Spellcasting meta card (slots, DC, attack mod)
+  var spellMeta = h('div', { class: 'spellcasting card', style: { padding: '10px', border: '1px dashed var(--bd)' } });
+
+  // top row: ability + numbers + derived DC/Atk
+  var topRow = h('div', { class: 'inline' }, [
+    // Spellcasting Ability selector
+    (function () {
+      const sel = h('select', { class: 'sel' }, ABILITIES.map(a => h('option', { value: a, selected: (ch.spellcasting?.ability || 'INT') === a }, [a])));
+      sel.addEventListener('change', () => updateDeep('spellcasting.ability', sel.value));
+      return labeledWrap('Spell Ability', sel);
+    })(),
+
+    labeledNumber('Cantrips Known', 'sp.cantrips', ch.spellcasting?.cantripsKnown || 0, v => updateDeep('spellcasting.cantripsKnown', Math.max(0, v)), 0),
+    labeledNumber('Prepared Spells', 'sp.prepared', ch.spellcasting?.preparedSpells || 0, v => updateDeep('spellcasting.preparedSpells', Math.max(0, v)), 0),
+
+    // Derived DC (with misc)
+    (function () {
+      const misc = h('input', { class: 'inp', type: 'number', value: ch.spellcasting?.miscSaveDC || 0, style: { width: '90px' } });
+      misc.addEventListener('input', () => updateDeep('spellcasting.miscSaveDC', int(misc.value, 0)));
+      return h('div', { class: 'lbl' }, [
+        h('div', { class: 'lblt' }, ['Spell Save DC']),
+        h('div', { class: 'inline' }, [
+          h('span', { class: 'chip' }, ['DC ', h('strong', { id: 'derived.spell.dc' }, [String(derived.spellSaveDC || (8 + abilityMod(ch.abilities.INT) + derived.proficiencyBonus))])]),
+          h('span', { class: 'mut' }, ['misc']),
+          misc,
+        ]),
+      ]);
+    })(),
+
+    // Derived Attack Mod (with misc)
+    (function () {
+      const misc = h('input', { class: 'inp', type: 'number', value: ch.spellcasting?.miscAttackMod || 0, style: { width: '90px' } });
+      misc.addEventListener('input', () => updateDeep('spellcasting.miscAttackMod', int(misc.value, 0)));
+      return h('div', { class: 'lbl' }, [
+        h('div', { class: 'lblt' }, ['Spell Attack Modifier']),
+        h('div', { class: 'inline' }, [
+          h('span', { class: 'chip' }, [h('strong', { id: 'derived.spell.attack' }, [fmtSigned(derived.spellAtkMod || 0)])]),
+          h('span', { class: 'mut' }, ['misc']),
+          misc,
+        ]),
+      ]);
+    })(),
+  ]);
+  spellMeta.appendChild(topRow);
+
+  // slots grid header
+  spellMeta.appendChild(h('div', { class: 'grid hdr' }, [
+    h('div', {}, ['Lvl']),
+    h('div', {}, ['Total']),
+    h('div', {}, ['Used']),
+    h('div', {}, ['Slots']),
+  ]));
+
+  // slots rows (1..9)
+  for (let lvl = 1; lvl <= 9; lvl++) {
+    const key = `spellcasting.slots.${lvl}`;
+    const row = h('div', { class: 'grid' });
+
+    const total = int(ch.spellcasting?.slots?.[lvl]?.total, 0);
+    const used  = int(ch.spellcasting?.slots?.[lvl]?.used,  0);
+    const totalInp = h('input', { class: 'inp', type: 'number', value: total, min: 0 });
+    const usedInp  = h('input', { class: 'inp', type: 'number', value: used,  min: 0, max: Math.max(0,total) });
+
+    totalInp.addEventListener('input', () => {
+      const v = Math.max(0, int(totalInp.value, 0));
+      updateDeep(`${key}.total`, v);
+      if (used > v) updateDeep(`${key}.used`, v);
+      renderSpellDots(); // refresh dots
+    });
+    usedInp.addEventListener('input', () => {
+      const v = clamp(int(usedInp.value, 0), 0, Math.max(0, int(totalInp.value, 0)));
+      updateDeep(`${key}.used`, v);
+      renderSpellDots();
+    });
+
+    const dots = h('div', { class: 'slotDots', 'data-lvl': String(lvl) });
+    row.appendChild(h('div', {}, [String(lvl)]));
+    row.appendChild(totalInp);
+    row.appendChild(usedInp);
+    row.appendChild(dots);
+    spellMeta.appendChild(row);
+  }
+
+  // dot render helper
+  function renderSpellDots() {
+    for (let lvl = 1; lvl <= 9; lvl++) {
+      const dots = spellMeta.querySelector(`.slotDots[data-lvl="${lvl}"]`);
+      if (!dots) continue;
+      dots.innerHTML = '';
+      const total = int(ch.spellcasting?.slots?.[lvl]?.total, 0);
+      const used  = int(ch.spellcasting?.slots?.[lvl]?.used,  0);
+      for (let i = 0; i < total; i++) {
+        const on = i < used;
+        const d = h('div', { class: 'dot ' + (on ? 'on' : 'off'), title: on ? 'Click to unuse' : 'Click to use' }, [on ? '●' : '○']);
+        d.addEventListener('click', () => {
+          const cur = int(ch.spellcasting?.slots?.[lvl]?.used, 0);
+          if (on) updateDeep(`spellcasting.slots.${lvl}.used`, Math.max(0, cur - 1));
+          else    updateDeep(`spellcasting.slots.${lvl}.used`, Math.min(total, cur + 1));
+          renderSpellDots();
+        });
+        dots.appendChild(d);
+      }
+    }
+  }
+  renderSpellDots();
+
+  spellsCard.appendChild(spellMeta);
+
   var spellsList = h('div', { id: 'spells.list' });
   var addSpellBtn = h('button', { class: 'btn', style: { marginTop: '8px' } }, ['+ Add spell']);
   addSpellBtn.addEventListener('click', function () {
@@ -923,7 +1116,7 @@ function renderInventory() {
   ch.inventory.forEach(function (it, i) {
     var name  = h('input', { class: 'inp', value: it.name || '' });
     var value = h('input', { class: 'inp', value: it.value || '', placeholder: 'e.g., 25 gp' });
-    var desc  = h('input', { class: 'inp', value: it.desc || '' });
+    var desc  = h('textarea', { class: 'inp', value: it.desc || '', placeholder: 'Item description...', rows: 2 });
     var del   = h('button', { class: 'btn small', title: 'Remove' }, ['✕']);
 
     name.addEventListener('input',  function () { ch.inventory[i].name  = name.value; });
@@ -931,14 +1124,21 @@ function renderInventory() {
     desc.addEventListener('input',  function () { ch.inventory[i].desc  = desc.value; });
     del.addEventListener('click',   function () { ch.inventory.splice(i, 1); renderInventory(); });
 
-    var row = h('div', { class: 'rowGrid' }, [
-      labeledWrap('Item',        name),
-      labeledWrap('Value',       value),
-      labeledWrap('Description', desc),
-      del,
+    // Create the item row container
+    var itemRow = h('div', { class: 'itemRow' }, [
+      // Top row with name, value, and delete button
+      h('div', { class: 'itemTopRow' }, [
+        labeledWrap('Item', name),
+        labeledWrap('Value', value),
+        del,
+      ]),
+      // Description textarea below
+      h('div', { class: 'itemDescription' }, [
+        labeledWrap('Description', desc),
+      ]),
     ]);
 
-    list.appendChild(row);
+    list.appendChild(itemRow);
   });
 }
 
@@ -1061,6 +1261,12 @@ function renderDynamic() {
         if (el)
             el.textContent = fmtSigned(derived.skills[sk]);
     });
+    // Spellcasting
+    const sdc = document.getElementById('derived.spell.dc');
+    if (sdc) sdc.textContent = String(derived.spellSaveDC);
+    const sam = document.getElementById('derived.spell.attack');
+    if (sam) sam.textContent = fmtSigned(derived.spellAtkMod);
+
 }
 function fmtSigned(n) {
     return (n >= 0 ? "+".concat(n) : "".concat(n));
@@ -1157,6 +1363,15 @@ function mergeCharacter(base, incoming) {
     attacks: (incoming.attacks || base.attacks || []).map(a => ({ name: '', toHit: '', damage: '', notes: '', ...a })),
     spells: (incoming.spells || base.spells || []).map(s => ({ name: 'New Spell', range: '', hitDc: '+0', damage: '1d6', notes: '', ...s })), // <— NEW
     inventory: (incoming.inventory || base.inventory || []).map(it => ({ name: 'New Item', value: '', desc: '', ...it })),                    // <— NEW
+    spellcasting: {
+    ...base.spellcasting,
+    ...(incoming.spellcasting || {}),
+    slots: {
+      ...base.spellcasting.slots,
+      ...((incoming.spellcasting && incoming.spellcasting.slots) || {})
+  }
+},
+
   };
 }
 (function bootstrap() {

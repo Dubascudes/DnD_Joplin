@@ -17,7 +17,7 @@ export function defaultCharacter() {
     abilities: { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
     saves: [], skillsProficient: [],
     armorClass: 10, speed: 30, maxHP: 1, currentHP: 1, hitDice: '1d8',
-    attacks: [], inventory: [], features: [], spells: { slots: {}, known: [] }
+    attacks: [], inventory: [], features: [], spells: []
   };
 }
 

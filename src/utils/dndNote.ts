@@ -215,6 +215,10 @@ export function normalizeYamlToCharacter(raw: any) {
   out.attacks = Array.isArray(raw?.attacks) ? raw.attacks : [];
   out.notes = raw?.notes ?? '';
 
+  // 7) inventory and spells
+  out.inventory = Array.isArray(raw?.inventory) ? raw.inventory : [];
+  out.spells = Array.isArray(raw?.spells) ? raw.spells : [];
+
   // ignore profBonus from YAML — the panel computes proficiency from level
   return out;
 }
