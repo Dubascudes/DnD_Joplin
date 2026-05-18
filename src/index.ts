@@ -1,5 +1,5 @@
 import joplin from 'api';
-import { ToolbarButtonLocation } from 'api/types';
+import { ToolbarButtonLocation, SettingItemType } from 'api/types';
 // import { parseFrontMatter, writeFrontMatter } from './utils/yaml';
 import { deriveStats, defaultCharacter, computeDerived, roll } from './utils/dnd';
 import { findDndBlock, upsertDndBlock, normalizeYamlToCharacter, readDndYaml } from './utils/dndNote'; // helpers above
@@ -109,8 +109,183 @@ async function loadCharacterFromNoteFresh() {
   return { noteId: fresh.id, character, derived };
 }
 
+// ---------- Character Creation Wizard ----------
+function pbCost(score: number): number {
+  // Standard 27-point buy 5e: scores 8..15 cost {0,1,2,3,4,5,7,9}
+  const table: Record<number, number> = { 8:0, 9:1, 10:2, 11:3, 12:4, 13:5, 14:7, 15:9 };
+  return table[Math.max(8, Math.min(15, Math.floor(score)))] ?? 9;
+}
+
+// Local SRD datasets (bundled JSON)
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const CLASSES: any[] = require('./dnd-resources/5e-SRD-Classes.json');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const BACKGROUNDS: any[] = require('./dnd-resources/5e-SRD-Backgrounds.json');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const ALIGNMENTS: any[] = require('./dnd-resources/5e-SRD-Alignments.json');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const RACES: any[] = require('./dnd-resources/5e-SRD-Races.json');
+
+async function promptDialog(id: string, title: string, html: string, buttons: any) {
+  const d = await joplin.views.dialogs.create(id);
+  await joplin.views.dialogs.setHtml(d, `<div style="font: 14px system-ui; min-width: 420px;">${html}</div>`);
+  await joplin.views.dialogs.setButtons(d, buttons);
+  const res = await joplin.views.dialogs.open(d);
+  return res;
+}
+
+async function openCharacterCreationWizard() {
+  const dialogs = joplin.views.dialogs;
+
+  // 1) Name
+  let name = '';
+  {
+    const res = await promptDialog('dnd-cc-name', 'Character Name', `
+      <form name="f">
+        <label>Name<br><input name="name" type="text" style="width:100%" required/></label>
+      </form>
+    `, [{id:'ok', title:'Next'}]);
+    name = res?.formData?.f?.name || '';
+  }
+
+  // 2) Class
+  let cls: any = null;
+  {
+    const opts = CLASSES.map(c => `<option value="${c.index}">${c.name}</option>`).join('');
+    const res = await promptDialog('dnd-cc-class', 'Choose Class', `
+      <form name="f"><label>Class<br>
+        <select name="klass" style="width:100%">${opts}</select>
+      </label></form>
+    `, [{id:'ok', title:'Next'}]);
+    const idx = res?.formData?.f?.klass;
+    cls = CLASSES.find(c => c.index === idx) || CLASSES[0];
+  }
+
+  // 3) Background + Alignment
+  let background: any = null; let alignment: any = null;
+  {
+    const bgOpts = BACKGROUNDS.map(b => `<option value="${b.index}">${b.name}</option>`).join('');
+    const alOpts = ALIGNMENTS.map(a => `<option value="${a.index}">${a.name}</option>`).join('');
+    const res = await promptDialog('dnd-cc-bg-align', 'Background and Alignment', `
+      <form name="f" style="display:grid; gap:10px;">
+        <label>Background<br><select name="bg" style="width:100%">${bgOpts}</select></label>
+        <label>Alignment<br><select name="al" style="width:100%">${alOpts}</select></label>
+      </form>
+    `, [{id:'ok', title:'Next'}]);
+    background = BACKGROUNDS.find(b => b.index === (res?.formData?.f?.bg)) || BACKGROUNDS[0];
+    alignment = ALIGNMENTS.find(a => a.index === (res?.formData?.f?.al)) || ALIGNMENTS[0];
+  }
+
+  // 4) Species (Race)
+  let race: any = null;
+  {
+    const rcOpts = RACES.map(r => `<option value="${r.index}">${r.name}</option>`).join('');
+    const res = await promptDialog('dnd-cc-race', 'Choose Species', `
+      <form name="f"><label>Species<br>
+        <select name="race" style="width:100%">${rcOpts}</select>
+      </label></form>
+    `, [{id:'ok', title:'Next'}]);
+    const idx = res?.formData?.f?.race;
+    race = RACES.find(r => r.index === idx) || RACES[0];
+  }
+
+  // 5) Ability scores: method
+  let abilities = { STR: 15, DEX: 14, CON: 13, INT: 12, WIS: 10, CHA: 8 };
+  {
+    const res = await promptDialog('dnd-cc-abil-method', 'Ability Scores', `
+      <form name="f" style="display:grid; gap:10px;">
+        <label><input type="radio" name="m" value="roll" checked/> Roll (4d6 drop lowest)</label>
+        <label><input type="radio" name="m" value="point"/> Point Buy (27)</label>
+      </form>
+    `, [{id:'ok', title:'Next'}]);
+    const m = res?.formData?.f?.m || 'roll';
+    if (m === 'roll') {
+      function roll4d6dl() { const r = [0,0,0,0].map(()=>1+Math.floor(Math.random()*6)); r.sort((a,b)=>a-b); return r[1]+r[2]+r[3]; }
+      const arr = [roll4d6dl(), roll4d6dl(), roll4d6dl(), roll4d6dl(), roll4d6dl(), roll4d6dl()].sort((a,b)=>b-a);
+      // Assign in common order: STR, DEX, CON, INT, WIS, CHA
+      abilities = { STR: arr[0], DEX: arr[1], CON: arr[2], INT: arr[3], WIS: arr[4], CHA: arr[5] };
+    } else {
+      // point buy inputs
+      const res2 = await promptDialog('dnd-cc-abil-point', 'Point Buy (27)', `
+        <form name="f" class="grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+          <label>STR<input type="number" name="STR" min="8" max="15" value="15"/></label>
+          <label>DEX<input type="number" name="DEX" min="8" max="15" value="14"/></label>
+          <label>CON<input type="number" name="CON" min="8" max="15" value="13"/></label>
+          <label>INT<input type="number" name="INT" min="8" max="15" value="12"/></label>
+          <label>WIS<input type="number" name="WIS" min="8" max="15" value="10"/></label>
+          <label>CHA<input type="number" name="CHA" min="8" max="15" value="8"/></label>
+          <div style="grid-column:1/-1;color:#666;">Ensure total cost ≤ 27</div>
+        </form>
+      `, [{id:'ok', title:'Next'}]);
+      const f = res2?.formData?.f || {};
+      const cand = { STR:Number(f.STR||15), DEX:Number(f.DEX||14), CON:Number(f.CON||13), INT:Number(f.INT||12), WIS:Number(f.WIS||10), CHA:Number(f.CHA||8) };
+      const cost = Object.values(cand).reduce((a,v)=>a+pbCost(v),0) - 6*pbCost(8);
+      if (cost > 27) {
+        await promptDialog('dnd-cc-abil-err', 'Point Buy Error', `<div>Point buy exceeds 27 (got ${cost}). Try again.</div>`, [{id:'ok', title:'OK'}]);
+        return await openCharacterCreationWizard();
+      }
+      abilities = cand as any;
+    }
+  }
+
+  // 6) Starting equipment from class (optional)
+  const inventory: any[] = [];
+  try {
+    const se = cls?.starting_equipment || [];
+    for (const it of se) {
+      if (it?.equipment?.name) inventory.push({ name: it.equipment.name, value: '', desc: '' });
+    }
+  } catch {}
+
+  // Compose character
+  const ch0 = defaultCharacter();
+  const character: any = { ...ch0 };
+  character.name = name || '';
+  character.class = cls?.name || '';
+  character.level = 1;
+  character.race = race?.name || '';
+  character.background = background?.name || '';
+  character.alignment = alignment?.name || '';
+  character.abilities = abilities;
+  const spd = typeof race?.speed === 'number' ? `${race.speed} ft` : (race?.speed?.walk ? `${race.speed.walk} ft` : ch0.speed);
+  character.speed = spd;
+  // saving throw profs from class
+  const saves = (cls?.saving_throws || []).map((s:any)=>String(s?.index||'').toUpperCase());
+  character.savingThrowsProficiencies = { STR: saves.includes('STR'), DEX: saves.includes('DEX'), CON: saves.includes('CON'), INT: saves.includes('INT'), WIS: saves.includes('WIS'), CHA: saves.includes('CHA') };
+  // inventory
+  character.inventory = inventory;
+
+  return character;
+}
+
 joplin.plugins.register({
   onStart: async () => {
+    // ---- Settings ----
+    await joplin.settings.registerSection('dndCharacterSheet', {
+      label: 'D&D Character Sheet',
+      iconName: 'fas fa-dragon',
+    });
+
+    await joplin.settings.registerSettings({
+      'dnd.theme': {
+        section: 'dndCharacterSheet',
+        type: SettingItemType.String,
+        public: true,
+        label: 'Color Theme',
+        value: 'light',
+        isEnum: true,
+        options: {
+          'light': 'Light (Default)',
+          'dark': 'Dark',
+          'parchment': 'Parchment / Tan',
+          'darkDungeon': 'Dark Dungeon',
+          'forest': 'Forest Green',
+          'royal': 'Royal Purple',
+        },
+        description: 'Choose the color scheme for the character sheet panel.',
+      },
+    });
+
     const panel = await joplin.views.panels.create('dnd-editor');
     await joplin.views.panels.setHtml(panel, '<div id="root"> Test </div>');
     await joplin.views.panels.addScript(panel, 'utils/renderer.js');
@@ -124,6 +299,15 @@ joplin.plugins.register({
       await joplin.views.panels.postMessage(panel, msg);
     };
 
+    async function pushThemeToPanel() {
+      const theme = await joplin.settings.value('dnd.theme');
+      await sendToPanel({ type: 'theme', theme: theme || 'light' });
+    }
+
+    await joplin.settings.onChange(async () => {
+      await pushThemeToPanel();
+    });
+
 	await joplin.views.panels.onMessage(panel, async (msg) => {
 	try {
 		if (msg.type === 'ready') {
@@ -133,6 +317,7 @@ joplin.plugins.register({
 	      // Immediately load from the current note on first ready.
 	      const { noteId, character, derived } = await loadCharacterFromNoteFresh();
 	      await joplin.views.panels.postMessage(panel, { type: 'data', noteId, character, derived });
+		  await pushThemeToPanel();
 		return;
 		}
 
@@ -161,7 +346,9 @@ joplin.plugins.register({
 
 		if (msg.type === 'roll') {
 		const result = roll(msg.expr);
-		await joplin.views.panels.postMessage(panel, { type: 'rollResult', result });
+		const totalMatch = result.match(/=\s*(-?\d+)\s*$/);
+		const total = totalMatch ? parseInt(totalMatch[1], 10) : null;
+		await joplin.views.panels.postMessage(panel, { type: 'rollResult', result, total, expr: msg.expr });
 		return;
 		}
 	} catch (e) {
@@ -194,8 +381,10 @@ joplin.plugins.register({
       label: 'Insert DnD Character Template',
       execute: async () => {
         const note = await getActiveNote();
-        // Start with your default character and insert as fenced YAML
-        const yaml = yamlStringify(defaultCharacter());
+        // If there is no existing block or it's effectively empty, run the wizard
+        const has = !!findDndBlock(note.body);
+        const character = await openCharacterCreationWizard();
+        const yaml = yamlStringify(character || defaultCharacter());
         const updated = upsertDndBlock(note.body, yaml);
         await joplin.data.put(['notes', note.id], null, { body: updated });
         await refreshPanelVisibility();
