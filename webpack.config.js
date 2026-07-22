@@ -215,8 +215,17 @@ const pluginConfig = { ...baseConfig, entry: './src/index.ts',
 							// already copied into /dist so we don't copy them.
 							'**/*.ts',
 							'**/*.tsx',
+							// SRD datasets used by the code are require()d and
+							// bundled into index.js; don't ship them as files.
+							'**/dnd-resources/**',
 						],
 					},
+				},
+				{
+					// The only SRD file fetched at runtime (ability tooltips)
+					from: 'dnd-resources/5e-SRD-Ability-Scores.json',
+					context: path.resolve(__dirname, 'src'),
+					to: path.resolve(__dirname, 'dist/dnd-resources/5e-SRD-Ability-Scores.json'),
 				},
 			],
 		}),

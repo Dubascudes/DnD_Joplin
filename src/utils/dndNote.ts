@@ -111,6 +111,56 @@ export function readDndYaml(body: string): string | null {
   return b ? b.yaml : null;
 }
 
+// ---- ```dndjournal blocks (journal entry notes in the Character Journal notebook) ----
+
+export function findDndJournalBlock(body: string): null | {
+  yaml: string; start: number; end: number; openFence: string; closeFence: string;
+} {
+  const openRe = /(^|\r?\n)```[ \t]*dndjournal\b[^\r\n]*\r?\n/gi;
+  const mOpen = openRe.exec(body);
+  if (!mOpen) return null;
+
+  const openStart = mOpen.index + (mOpen[1] ? mOpen[1].length : 0);
+  const yamlStart = openRe.lastIndex;
+  const openFence = body.slice(openStart, yamlStart);
+
+  const closeRe = /\r?\n```[ \t]*\r?(?=\n|$)/g;
+  closeRe.lastIndex = yamlStart;
+  const mClose = closeRe.exec(body);
+  if (!mClose) return null;
+
+  const yamlEnd = mClose.index;
+  const closeFence = body.slice(mClose.index, closeRe.lastIndex);
+  const end = closeRe.lastIndex;
+  return { yaml: body.slice(yamlStart, yamlEnd), start: openStart, end, openFence, closeFence };
+}
+
+export function upsertDndJournalBlock(body: string, newYaml: string) {
+  const cleanedYaml = normaliseEol(newYaml.replace(/\t/g, '  ').trim() + '\n', body);
+
+  const found = findDndJournalBlock(body);
+  if (found) {
+    const block = `${found.openFence}${cleanedYaml}${found.closeFence}`;
+    return body.slice(0, found.start) + block + body.slice(found.end);
+  }
+
+  const hasCRLF = /\r\n/.test(body);
+  const eol = hasCRLF ? '\r\n' : '\n';
+  const block = `\`\`\`dndjournal${eol}${cleanedYaml}${eol}\`\`\``;
+  return block + eol + eol + body;
+}
+
+/** Normalise a journal entry object to the panel's shape. */
+export function normalizeJournalEntry(raw: any) {
+  return {
+    title: String(raw?.title ?? ''),
+    date: String(raw?.date ?? ''),
+    character: String(raw?.character ?? ''),
+    log: Array.isArray(raw?.log) ? raw.log.map((l: any) => String(l)) : [],
+    text: String(raw?.text ?? ''),
+  };
+}
+
 
 // Normalize what’s inside ```dnd fences to the panel’s schema,
 // preserving fields like "name" and mapping common alternates.
@@ -215,9 +265,30 @@ export function normalizeYamlToCharacter(raw: any) {
   out.attacks = Array.isArray(raw?.attacks) ? raw.attacks : [];
   out.notes = raw?.notes ?? '';
 
-  // 7) inventory and spells
+  // 7) inventory, spells and features
   out.inventory = Array.isArray(raw?.inventory) ? raw.inventory : [];
   out.spells = Array.isArray(raw?.spells) ? raw.spells : [];
+  out.features = Array.isArray(raw?.features) ? raw.features : [];
+
+  // 8) spellcasting + journal (previously dropped on load, which lost slot totals)
+  const sc = raw?.spellcasting || {};
+  const slots: any = {};
+  for (let i = 1; i <= 9; i++) {
+    const s = sc?.slots?.[i] ?? sc?.slots?.[String(i)] ?? {};
+    slots[i] = { total: Number(s?.total ?? 0), used: Number(s?.used ?? 0) };
+  }
+  out.spellcasting = {
+    ability: sc?.ability ?? 'NA',
+    miscSaveDC: Number(sc?.miscSaveDC ?? 0),
+    miscAttackMod: Number(sc?.miscAttackMod ?? 0),
+    cantripsKnown: Number(sc?.cantripsKnown ?? 0),
+    preparedSpells: Number(sc?.preparedSpells ?? 0),
+    slots,
+  };
+  out.journal = Array.isArray(raw?.journal) ? raw.journal : [];
+
+  // 9) D&D Beyond linkage (enables the panel's re-sync button)
+  if (raw?.ddbId != null) out.ddbId = Number(raw.ddbId);
 
   // ignore profBonus from YAML — the panel computes proficiency from level
   return out;

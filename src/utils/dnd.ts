@@ -63,6 +63,7 @@ export function defaultCharacter() {
     attacks: [],
     spells: [],
     inventory: [],
+    features: [],
     notes: '',
     journal: [],
     spellcasting: {

@@ -46,102 +46,64 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
-// ---- UI Layout (persisted) ----
-const UI_LAYOUT_KEY = 'dnd.character.editor.layout.v2';
-var DEFAULT_LAYOUT = {
-  version: 2,
-  columns: 4,
-  tiles: {
-    identity:  { visible: true, colSpan: 2 },
-    combat:    { visible: true, colSpan: 2 },
-    abilities: { visible: true, colSpan: 4 },
-    skills:    { visible: true, colSpan: 2 },
-    attacks:   { visible: true, colSpan: 2 },
-    spells:    { visible: true, colSpan: 2 },
-    inventory: { visible: true, colSpan: 2 },
-    notes:     { visible: true, colSpan: 4 },
-    journal:   { visible: true, colSpan: 4 },
-  },
-  order: ['identity','combat','abilities','skills','attacks','spells','inventory','journal','notes'],
-};
-var TILE_MIN_SPAN = {
-  identity: 1, combat: 1, abilities: 1,
-  skills: 1, attacks: 2, spells: 2,
-  inventory: 1, notes: 1, journal: 1,
-};
-function loadLayout(){
-  try {
-    var saved = JSON.parse(localStorage.getItem(UI_LAYOUT_KEY) || '');
-    if (saved && saved.version === 2) return saved;
-    return null;
-  } catch { return null; }
+// ---- Active tab (persisted) ----
+var ACTIVE_TAB_KEY = 'dnd.character.editor.activeTab.v1';
+var activeTab = (function () {
+  try { return localStorage.getItem(ACTIVE_TAB_KEY) || 'actions'; } catch { return 'actions'; }
+})();
+function setActiveTab(id) {
+  activeTab = id;
+  try { localStorage.setItem(ACTIVE_TAB_KEY, id); } catch {}
 }
-function migrateV1Layout(){
-  try {
-    var old = JSON.parse(localStorage.getItem('dnd.character.editor.layout.v1') || '');
-    if (!old) return null;
-    var v2 = JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
-    var bottomTiles = ['skills','attacks','spells','inventory','notes'];
-    bottomTiles.forEach(function(id){
-      if (old.tiles && old.tiles[id]) {
-        v2.tiles[id].visible = !!old.tiles[id].visible;
-      }
-    });
-    if (Array.isArray(old.order)) {
-      var bottomOrder = old.order.filter(function(id){ return bottomTiles.indexOf(id) !== -1; });
-      v2.order = ['identity','combat','abilities'].concat(bottomOrder);
-    }
-    return v2;
-  } catch { return null; }
-}
-let layout = loadLayout() || migrateV1Layout() || JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
-function saveLayout(){ try{ localStorage.setItem(UI_LAYOUT_KEY, JSON.stringify(layout)); }catch{} }
 
 // ---- Color Themes ----
+// Each theme supplies the full variable set consumed by the sheet CSS,
+// including an accent color used for proficiency pips, rolls and tabs.
 var THEMES = {
   light: {
-    '--bd':'#d0d4db','--tx':'#101216','--mut':'#5a6270',
-    '--bg':'#ffffff','--chip':'#f5f7fa','--card-bg':'#ffffff',
-    '--dot-on-bg':'#222','--dot-on-tx':'#fff',
-    '--btn-hover':'#f9fafb','--tab-active-bg':'#eef3ff','--tab-active-bd':'#88aaff',
+    '--bg':'#f4f0e6','--card-bg':'#ffffff','--bd':'#d9d4c8','--tx':'#1d1b16','--mut':'#7b7466',
+    '--chip':'#f5f1e8','--btn-hover':'#ece7da',
+    '--accent':'#bf2c2c','--accent-tx':'#ffffff',
+    '--header-bg':'#3a2626','--header-tx':'#f7f2e9',
   },
   dark: {
-    '--bd':'#3a3f4b','--tx':'#e0e2e6','--mut':'#8a8f9a',
-    '--bg':'#1e2028','--chip':'#2a2d36','--card-bg':'#25272f',
-    '--dot-on-bg':'#e0e2e6','--dot-on-tx':'#1e2028',
-    '--btn-hover':'#2f323c','--tab-active-bg':'#2a3550','--tab-active-bd':'#5577cc',
+    '--bg':'#17191f','--card-bg':'#21242c','--bd':'#3a3f4b','--tx':'#e2e4e9','--mut':'#8b91a0',
+    '--chip':'#282c35','--btn-hover':'#303540',
+    '--accent':'#d64545','--accent-tx':'#ffffff',
+    '--header-bg':'#101216','--header-tx':'#eceef2',
   },
   parchment: {
-    '--bd':'#c4a96a','--tx':'#3b2e1a','--mut':'#7a6840',
-    '--bg':'#f5e6c8','--chip':'#ecdab0','--card-bg':'#faf0d8',
-    '--dot-on-bg':'#3b2e1a','--dot-on-tx':'#f5e6c8',
-    '--btn-hover':'#ecdab0','--tab-active-bg':'#e0c890','--tab-active-bd':'#a08030',
+    '--bg':'#eadfbf','--card-bg':'#f8efd9','--bd':'#c9ae76','--tx':'#3b2e1a','--mut':'#85714a',
+    '--chip':'#f0e5c6','--btn-hover':'#ecdfba',
+    '--accent':'#94391d','--accent-tx':'#f8efd9',
+    '--header-bg':'#4f3520','--header-tx':'#f2e6c8',
   },
   darkDungeon: {
-    '--bd':'#4a3828','--tx':'#d4c4a0','--mut':'#8a7a5a',
-    '--bg':'#1a1410','--chip':'#2a2018','--card-bg':'#221a12',
-    '--dot-on-bg':'#d4c4a0','--dot-on-tx':'#1a1410',
-    '--btn-hover':'#2a2018','--tab-active-bg':'#3a2a18','--tab-active-bd':'#8a6a30',
+    '--bg':'#16110d','--card-bg':'#201812','--bd':'#4a3828','--tx':'#d8c8a2','--mut':'#91805f',
+    '--chip':'#291f16','--btn-hover':'#31261a',
+    '--accent':'#c98a2c','--accent-tx':'#1a1410',
+    '--header-bg':'#0d0a07','--header-tx':'#e6d5ac',
   },
   forest: {
-    '--bd':'#4a7a50','--tx':'#1a2e1a','--mut':'#5a8a5a',
-    '--bg':'#e8f0e4','--chip':'#d0e4cc','--card-bg':'#f0f8ec',
-    '--dot-on-bg':'#2a4a2a','--dot-on-tx':'#e8f0e4',
-    '--btn-hover':'#d8ecd4','--tab-active-bg':'#c0dcc0','--tab-active-bd':'#4a8a4a',
+    '--bg':'#e7efe2','--card-bg':'#f7fbf4','--bd':'#b4ccae','--tx':'#1d2d1d','--mut':'#61795f',
+    '--chip':'#ecf3e7','--btn-hover':'#dfeada',
+    '--accent':'#2f7d45','--accent-tx':'#ffffff',
+    '--header-bg':'#23402b','--header-tx':'#eef7ea',
   },
   royal: {
-    '--bd':'#6a4a8a','--tx':'#1e1228','--mut':'#7a5a9a',
-    '--bg':'#f0e8f8','--chip':'#e0d0f0','--card-bg':'#f8f0ff',
-    '--dot-on-bg':'#3a2050','--dot-on-tx':'#f0e8f8',
-    '--btn-hover':'#e8d8f4','--tab-active-bg':'#d0b8e8','--tab-active-bd':'#7a4aaa',
+    '--bg':'#ede7f5','--card-bg':'#faf7ff','--bd':'#c6b3dd','--tx':'#241634','--mut':'#7a659a',
+    '--chip':'#f2ecfa','--btn-hover':'#e8dff4',
+    '--accent':'#6f3fb4','--accent-tx':'#ffffff',
+    '--header-bg':'#2f1e4a','--header-tx':'#f2ebfc',
   },
 };
 function applyTheme(name) {
   var theme = THEMES[name] || THEMES.light;
   var root = document.documentElement;
-  Object.keys(theme).forEach(function(prop) { root.style.setProperty(prop, theme[prop]); });
+  Object.keys(theme).forEach(function (prop) { root.style.setProperty(prop, theme[prop]); });
   try { localStorage.setItem('dnd.theme', name); } catch {}
 }
+
 
 // ---- WebGL 3D Dice Renderer ----
 var diceRenderer = null; // module-level ref, initialized in buildUI()
@@ -496,11 +458,22 @@ var DiceRenderer = (function () {
     var holdStart, holdDur=1.5, fadeStart, fadeDur=0.5;
     var onResult=null;
     var dice=[]; // array of active dice
+    var boundX=6, boundZ=6; // visible half-extents of the floor plane (world units)
+
+    // Keep dice inside the camera frustum: at floor level the visible half-height
+    // is tan(fov/2)*CAM_HEIGHT and half-width scales with the canvas aspect.
+    function updateBounds(){
+      var aspect = canvas.width / Math.max(1, canvas.height);
+      var half = Math.tan(Math.PI/8) * CAM_HEIGHT; // fov = π/4
+      boundZ = Math.max(1.5, half - 1.2);
+      boundX = Math.max(1.5, half * aspect - 1.2);
+    }
 
     function resize(){
       var dpr=window.devicePixelRatio||1;
       canvas.width=canvas.clientWidth*dpr; canvas.height=canvas.clientHeight*dpr;
       gl.viewport(0,0,canvas.width,canvas.height);
+      updateBounds();
     }
 
     // Find face pointing most toward -Y (toward camera looking down)
@@ -520,6 +493,12 @@ var DiceRenderer = (function () {
       var linFric=Math.pow(0.965, dt*60);
       d.velX*=linFric; d.velZ*=linFric;
       d.posX+=d.velX*dt; d.posZ+=d.velZ*dt;
+
+      // Invisible walls at the edge of the visible area
+      if(d.posX < -boundX){ d.posX = -boundX; d.velX = Math.abs(d.velX)*0.7; }
+      if(d.posX >  boundX){ d.posX =  boundX; d.velX = -Math.abs(d.velX)*0.7; }
+      if(d.posZ < -boundZ){ d.posZ = -boundZ; d.velZ = Math.abs(d.velZ)*0.7; }
+      if(d.posZ >  boundZ){ d.posZ =  boundZ; d.velZ = -Math.abs(d.velZ)*0.7; }
 
       var linSpeed=Math.sqrt(d.velX*d.velX+d.velZ*d.velZ);
 
@@ -689,15 +668,21 @@ var DiceRenderer = (function () {
         });
         if(items.length===0) return;
 
+        // Show + measure the canvas first so spawn positions respect the
+        // actual visible bounds (a narrow panel has a much smaller floor).
+        canvas.style.display = 'block';
+        resize();
+
         var N = items.length;
-        // Ring radius grows with number of dice to avoid crowding
-        var ringR = 5 + Math.min(3, (N-1)*0.4);
+        // Ring radius grows with number of dice to avoid crowding, but never
+        // beyond the visible area.
+        var ringR = Math.min(5 + Math.min(3, (N-1)*0.4), Math.min(boundX, boundZ) - 0.5);
 
         dice = items.map(function(type, i){
           var angle = (i/N)*Math.PI*2 + (Math.random()-0.5)*0.3;
           var dist = ringR + (Math.random()-0.5)*1.0;
-          var posX = Math.cos(angle)*dist;
-          var posZ = Math.sin(angle)*dist;
+          var posX = Math.max(-boundX, Math.min(boundX, Math.cos(angle)*dist));
+          var posZ = Math.max(-boundZ, Math.min(boundZ, Math.sin(angle)*dist));
           var speed = 16 + Math.random()*6;
           // direction toward center ± 60°
           var baseX = -posX/dist, baseZ = -posZ/dist;
@@ -861,7 +846,7 @@ function getAbilityTooltipText(a) {
                     if (cached)
                         return [2 /*return*/, cached];
                     return [4 /*yield*/, loadLocalAbilities()];
-                case 1: return [2 /*return*/, (_a.sent()).then(function (arr) {
+                case 1: return [2 /*return*/, (function (arr) {
                         try {
                             var idx = abilityIndexFor(a);
                             var item = Array.isArray(arr) ? arr.find(function (x) { return (x === null || x === void 0 ? void 0 : x.index) === idx; }) : null;
@@ -876,7 +861,7 @@ function getAbilityTooltipText(a) {
                         catch (_a) {
                             return null;
                         }
-                    })];
+                    })(_a.sent())];
             }
         });
     });
@@ -1061,8 +1046,9 @@ function defaultCharacter() {
         savingThrowsProficiencies: {},
         skillsProficiencies: baseSkills,
         attacks: [],
-        spells: [],            // <— NEW
-        inventory: [],         // <— NEW
+        spells: [],
+        inventory: [],
+        features: [],
         notes: '',
         journal: [],
         spellcasting: {
@@ -1124,18 +1110,46 @@ var ch = defaultCharacter();
 var derived = computeDerived(ch);
 var statusTimer = null;
 var isEditing = false;
-function setStatus(msg) {
-    var el = document.getElementById('status');
-    if (!el) return;
-    // Clear any pending timer and content
-    if (statusTimer) window.clearTimeout(statusTimer);
-    el.innerHTML = '';
-    // Build dismissible status chip
-    var text = h('span', {}, [String(msg || '')]);
-    var close = h('button', { class: 'btn small statusClose', title: 'Dismiss' }, ['✕']);
-    close.addEventListener('click', function () { el.innerHTML = ''; });
-    var wrap = h('span', { class: 'chip', style: { display: 'inline-flex', alignItems: 'center', gap: '6px' } }, [text, close]);
-    el.appendChild(wrap);
+// ---- Toast notifications (bottom-left stack, survives UI rebuilds) ----
+function getToastContainer() {
+  var c = document.getElementById('dnd-toasts');
+  if (!c) {
+    c = document.createElement('div');
+    c.id = 'dnd-toasts';
+    document.body.appendChild(c); // on body, not #root — rebuilds must not wipe toasts
+  }
+  return c;
+}
+function clearToasts() {
+  var c = document.getElementById('dnd-toasts');
+  if (c) c.innerHTML = '';
+}
+function syncToastClearAll() {
+  var c = getToastContainer();
+  var count = c.querySelectorAll('.toast').length;
+  var btn = c.querySelector('.toastClearAll');
+  if (count >= 2 && !btn) {
+    btn = h('button', { class: 'toastClearAll' }, ['Clear all']);
+    btn.addEventListener('click', clearToasts);
+    c.insertBefore(btn, c.firstChild);
+  } else if (count < 2 && btn) {
+    btn.remove();
+  }
+}
+// ttl in ms; 0 = sticky (stays until dismissed). Default 5s for transient statuses.
+function setStatus(msg, ttl) {
+  var c = getToastContainer();
+  var toast = h('div', { class: 'toast' });
+  var close = h('button', { class: 'toastClose', title: 'Dismiss' }, ['✕']);
+  close.addEventListener('click', function () { toast.remove(); syncToastClearAll(); });
+  toast.appendChild(h('span', {}, [String(msg || '')]));
+  toast.appendChild(close);
+  c.appendChild(toast);
+  var toasts = c.querySelectorAll('.toast');
+  if (toasts.length > 8) toasts[0].remove(); // cap the stack
+  if (ttl == null) ttl = 5000;
+  if (ttl > 0) setTimeout(function () { toast.remove(); syncToastClearAll(); }, ttl);
+  syncToastClearAll();
 }
 function update(next) {
     ch = __assign(__assign({}, ch), next);
@@ -1216,852 +1230,1156 @@ function selectProf(initial, onChange) {
     return sel;
 }
 // ---- Build UI ----
-// ---- Build UI ----
+var TAB_DEFS = [
+  { id: 'actions',   label: 'Actions'   },
+  { id: 'spells',    label: 'Spells'    },
+  { id: 'inventory', label: 'Inventory' },
+  { id: 'features',  label: 'Features'  },
+  { id: 'notes',     label: 'Notes'     },
+  { id: 'journal',   label: 'Journal'   },
+];
+
+var SHEET_CSS = `
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin:0; background:var(--bg); color:var(--tx); font:14px/1.4 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; overflow-y:auto; }
+  #root { min-height:100%; }
+  .sheet { max-width:1100px; margin:0 auto; padding:10px; display:flex; flex-direction:column; gap:10px; }
+
+  /* --- Header banner --- */
+  .sheetHeader {
+    position:sticky; top:0; z-index:50;
+    background:var(--header-bg); color:var(--header-tx);
+    border-radius:10px; padding:12px 16px;
+    display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;
+    box-shadow:0 2px 10px rgba(0,0,0,0.25);
+  }
+  .charName { font-family:Georgia,'Palatino Linotype','Times New Roman',serif; font-size:22px; font-weight:700; letter-spacing:0.3px; }
+  .charMeta { font-size:12.5px; opacity:0.78; margin-top:2px; }
+  .headerActions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .headerActions .btn {
+    background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.28);
+    color:var(--header-tx);
+  }
+  .headerActions .btn:hover { background:rgba(255,255,255,0.18); }
+  .headerActions .btn.primary { background:var(--accent); border-color:var(--accent); color:var(--accent-tx); }
+  .headerActions .btn.primary:hover { filter:brightness(1.1); background:var(--accent); }
+  /* --- Toasts (bottom-left roll results & statuses) --- */
+  #dnd-toasts {
+    position:fixed; left:10px; bottom:10px; z-index:1100;
+    display:flex; flex-direction:column; gap:6px;
+    max-width:min(340px, 80vw);
+  }
+  .toast {
+    display:flex; align-items:flex-start; gap:8px;
+    background:var(--card-bg); color:var(--tx);
+    border:1px solid var(--bd); border-left:3px solid var(--accent);
+    border-radius:8px; padding:8px 10px; font-size:12.5px;
+    box-shadow:0 4px 14px rgba(0,0,0,0.25);
+    animation:toastIn 0.15s ease-out;
+  }
+  .toast span { flex:1; white-space:pre-wrap; word-break:break-word; }
+  .toastClose { background:none; border:none; color:var(--mut); cursor:pointer; padding:0 2px; font-size:12px; flex:none; }
+  .toastClose:hover { color:var(--tx); }
+  .toastClearAll {
+    align-self:flex-start; background:var(--chip); border:1px solid var(--bd);
+    color:var(--mut); border-radius:999px; padding:2px 10px; font-size:11px; cursor:pointer;
+  }
+  .toastClearAll:hover { color:var(--tx); }
+  @keyframes toastIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+
+  /* --- HP heal/damage (play mode) --- */
+  .hpPlayRow { display:flex; align-items:center; justify-content:center; gap:4px; margin-top:6px; }
+  .hpPlayRow .inp { width:52px; text-align:center; padding:3px 4px; }
+
+  /* --- Journal entry header --- */
+  .journalEntryHeader .jTitle { flex:1; }
+  .journalEntryHeader .jDate { width:150px; flex:none; }
+  .journalRow { display:flex; align-items:center; gap:8px; padding:6px 2px; border-top:1px solid var(--chip); }
+  .journalRow .rowName { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .logLine { display:flex; gap:6px; align-items:baseline; font-size:12.5px; padding:3px 0; border-top:1px solid var(--chip); }
+  .logLine span { flex:1; }
+  .logLine .btn.small { flex:none; }
+
+  /* --- Generic bits --- */
+  .card { background:var(--card-bg); border:1px solid var(--bd); border-radius:10px; padding:12px; min-width:0; }
+  .cardTitle { font-size:11px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:var(--mut); text-align:center; margin:0 0 10px; }
+  .btn { border:1px solid var(--bd); background:var(--card-bg); color:var(--tx); padding:7px 10px; border-radius:8px; cursor:pointer; font:inherit; }
+  .btn:hover { background:var(--btn-hover); }
+  .btn.small { padding:3px 6px; font-size:12px; }
+  .inp, .sel, textarea {
+    width:100%; padding:7px 8px; border:1px solid var(--bd); border-radius:8px;
+    background:var(--card-bg); color:var(--tx); font:inherit;
+  }
+  textarea { min-height:90px; resize:vertical; }
+  .lbl { display:block; min-width:0; }
+  .lblt { font-size:10.5px; font-weight:600; letter-spacing:0.6px; text-transform:uppercase; color:var(--mut); margin-bottom:3px; }
+  .mut { color:var(--mut); }
+  .chip { background:var(--chip); border:1px solid var(--bd); padding:5px 8px; border-radius:8px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .emptyHint { color:var(--mut); font-size:13px; padding:6px 0; }
+
+  /* View mode: inputs render as flat text; edit-only chrome disappears */
+  .viewing .inp:disabled, .viewing .sel:disabled, .viewing textarea:disabled {
+    border-color:transparent; background:transparent; opacity:1; color:var(--tx); cursor:default;
+  }
+  .viewing .editOnly { display:none !important; }
+  .editing .viewOnly { display:none !important; }
+
+  /* --- Ability strip --- */
+  .abilityRow { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px; }
+  @media (max-width:640px) { .abilityRow { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+  .abilityBox { background:var(--card-bg); border:1px solid var(--bd); border-radius:10px; padding:8px 4px 10px; text-align:center; }
+  .abilityBox .abName { font-size:10px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase; color:var(--mut); margin-bottom:0; }
+  .abMod { font-size:24px; font-weight:700; line-height:1.2; margin:2px 0 4px; cursor:pointer; }
+  .abMod:hover { color:var(--accent); }
+  .abScore { display:inline-block; min-width:34px; padding:1px 9px; border:1px solid var(--bd); border-radius:999px; font-size:12px; color:var(--mut); background:var(--chip); }
+  .abScoreInp { width:56px; margin:0 auto; text-align:center; padding:3px 4px; }
+
+  /* --- Vitals --- */
+  .vitalsRow { display:grid; grid-template-columns:repeat(4,minmax(80px,1fr)) minmax(210px,1.8fr); gap:8px; align-items:stretch; }
+  @media (max-width:760px) { .vitalsRow { grid-template-columns:repeat(2,minmax(0,1fr)); } .vitalHp { grid-column:1 / -1; } }
+  .vital { background:var(--card-bg); border:1px solid var(--bd); border-radius:10px; padding:8px 6px; text-align:center; display:flex; flex-direction:column; justify-content:center; gap:2px; min-width:0; }
+  .vitalLabel { font-size:10px; font-weight:700; letter-spacing:1.1px; text-transform:uppercase; color:var(--mut); }
+  .vitalValue { font-size:21px; font-weight:700; line-height:1.25; }
+  .vital .roll { cursor:pointer; }
+  .vital .roll:hover { color:var(--accent); }
+  .vitalNum { width:64px; margin:0 auto; text-align:center; font-size:18px; font-weight:700; padding:3px 4px; }
+  .vitalAc .vitalNum { color:var(--accent); }
+  .hpRow { display:flex; align-items:center; justify-content:center; gap:4px; }
+  .hpRow .vitalNum { width:56px; margin:0; }
+  .hpSlash { font-size:18px; color:var(--mut); }
+  .hpTemp { display:flex; align-items:center; justify-content:center; gap:6px; font-size:11px; color:var(--mut); margin-top:2px; }
+  .hpTemp .inp { width:52px; text-align:center; padding:2px 4px; }
+
+  /* --- Main grid --- */
+  .mainGrid { display:grid; grid-template-columns:minmax(230px,290px) minmax(0,1fr); gap:10px; align-items:start; }
+  @media (max-width:840px) { .mainGrid { grid-template-columns:1fr; } }
+  .colStack { display:flex; flex-direction:column; gap:10px; min-width:0; }
+
+  /* --- Saving throws --- */
+  .savesGrid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .saveItem { display:flex; align-items:center; gap:7px; border:1px solid var(--bd); border-radius:8px; padding:5px 8px; background:var(--chip); cursor:pointer; user-select:none; }
+  .saveItem:hover { border-color:var(--accent); }
+  .saveName { flex:1; font-size:12.5px; font-weight:600; }
+  .saveVal { font-weight:700; }
+  .pip { width:11px; height:11px; border-radius:50%; border:2px solid var(--mut); flex:none; background:transparent; display:inline-block; }
+  .pip.on { background:var(--accent); border-color:var(--accent); }
+  .pip.expert { background:var(--accent); border-color:var(--accent); box-shadow:0 0 0 1.5px var(--card-bg), 0 0 0 3px var(--accent); }
+
+  /* --- Senses --- */
+  .senseRow { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:4px 2px; font-size:13px; }
+  .senseRow + .senseRow { border-top:1px solid var(--chip); }
+  .senseVal { font-weight:700; }
+
+  /* --- Skills --- */
+  .skillRow { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:8px; align-items:center; padding:4px 2px; }
+  .skillRow + .skillRow { border-top:1px solid var(--chip); }
+  .skillName { font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .skillAb { color:var(--mut); font-size:10px; text-transform:uppercase; letter-spacing:0.5px; }
+  .skillVal { font-weight:700; min-width:34px; text-align:right; cursor:pointer; }
+  .skillVal:hover { color:var(--accent); }
+  .skillRow .sel { width:74px; padding:2px 4px; }
+
+  /* --- Tabs --- */
+  .tabBar { display:flex; gap:2px; border-bottom:2px solid var(--bd); overflow-x:auto; scrollbar-width:none; }
+  .tabBar::-webkit-scrollbar { display:none; }
+  .tabBtn { background:none; border:none; padding:8px 12px; font:inherit; font-size:12px; font-weight:700; letter-spacing:0.9px; text-transform:uppercase; color:var(--mut); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; white-space:nowrap; }
+  .tabBtn:hover { color:var(--tx); }
+  .tabBtn.active { color:var(--accent); border-bottom-color:var(--accent); }
+  .tabSection { min-width:0; }
+
+  /* --- Actions / Spells tables --- */
+  .tableScroll { overflow-x:auto; }
+  .tableInner { min-width:480px; }
+  .rowsHead, .rowGrid { display:grid; grid-template-columns:1.3fr 0.7fr 0.9fr 1fr 1fr auto; gap:6px; align-items:center; }
+  .rowsHead { color:var(--mut); font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; padding:0 0 4px; }
+  .rowGrid { padding:5px 0; border-top:1px solid var(--chip); }
+  .rowGrid .inp { padding:5px 6px; }
+  .rowName { font-weight:600; }
+  .cell-inline { display:flex; align-items:center; gap:4px; min-width:0; }
+  .attack-roll-btn { padding:2px 6px; font-size:12px; line-height:1.2; border-radius:6px; flex:none; }
+  .addBtn { margin-top:8px; }
+
+  /* --- Spellcasting --- */
+  .spellStatRow { display:grid; grid-template-columns:repeat(auto-fit,minmax(96px,1fr)); gap:8px; margin-bottom:10px; }
+  .miscRow { display:flex; align-items:center; justify-content:center; gap:4px; font-size:10.5px; color:var(--mut); }
+  .miscRow .inp { width:48px; text-align:center; padding:1px 4px; }
+  .slotRow { display:flex; align-items:center; gap:8px; padding:4px 0; }
+  .slotRow + .slotRow { border-top:1px solid var(--chip); }
+  .slotLvl { width:56px; flex:none; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:var(--mut); }
+  .slotTotalInp { width:50px; flex:none; padding:2px 4px; text-align:center; }
+  .slotDots { display:flex; flex-wrap:wrap; gap:4px; }
+  .dot { width:15px; height:15px; border-radius:50%; border:1.5px solid var(--accent); cursor:pointer; background:transparent; }
+  .dot.on { background:var(--accent); }
+  .spellsBlock { margin-top:12px; }
+
+  /* --- Collapsible list rows (spells + inventory) --- */
+  .srowHead, .srow { display:grid; grid-template-columns:18px minmax(90px,1.3fr) 0.7fr 0.9fr 1fr auto auto; gap:6px; align-items:center; }
+  .irowHead, .irow { display:grid; grid-template-columns:18px minmax(0,1.5fr) minmax(70px,0.7fr) auto auto; gap:6px; align-items:center; }
+  .frow { display:grid; grid-template-columns:18px minmax(0,1fr) auto auto; gap:6px; align-items:center; }
+  /* Actions-tab variants: spells without the toggle column, features name-only */
+  .asrowHead, .asrow { display:grid; grid-template-columns:18px minmax(90px,1.3fr) 0.7fr 0.9fr 1fr auto; gap:6px; align-items:center; }
+  .afrow { display:grid; grid-template-columns:18px minmax(0,1fr) auto; gap:6px; align-items:center; }
+  .ftrow { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:6px; align-items:center; }
+  .ftStatement { padding:2px 0 2px; }
+  .ftStatement textarea { min-height:0; resize:none; color:var(--mut); font-size:12.5px; line-height:1.4; padding:2px 8px; }
+  .srowHead, .irowHead, .asrowHead { color:var(--mut); font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; padding:0 0 4px; }
+  .featText { white-space:pre-wrap; font-size:12.5px; color:var(--tx); }
+
+  /* --- Rich note text (view mode): paragraphs + real tables --- */
+  .richText { font-size:12.5px; color:var(--tx); }
+  .richText .rtP { margin:0 0 8px; white-space:pre-wrap; }
+  .richText .rtP:last-child { margin-bottom:0; }
+  .rtTableWrap { overflow-x:auto; margin:4px 0 8px; }
+  .rtTable { border-collapse:collapse; font-size:12px; }
+  .rtTable th, .rtTable td { border:1px solid var(--bd); padding:3px 9px; text-align:left; white-space:nowrap; }
+  .rtTable th { background:var(--chip); font-weight:700; }
+  .featSectionHead {
+    margin:12px 0 2px; padding:4px 8px;
+    background:var(--chip); border:1px solid var(--bd); border-radius:6px;
+    font-size:10.5px; font-weight:700; letter-spacing:1.1px; text-transform:uppercase; color:var(--mut);
+  }
+  .featSectionHead:first-child { margin-top:0; }
+  .rowWrap { border-top:1px solid var(--chip); padding:5px 0; }
+  .rowWrap .inp { padding:5px 6px; }
+  .subRow { padding:8px 0 4px 24px; display:grid; gap:8px; }
+  .subRow textarea { min-height:48px; }
+  .subGrid3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+  .caret { background:none; border:none; cursor:pointer; color:var(--mut); padding:0; width:18px; font-size:11px; line-height:1; }
+  .caret:hover { color:var(--tx); }
+  .actToggle { padding:3px 7px; font-size:12px; line-height:1.2; border-radius:6px; }
+  .actToggle.on { color:var(--accent); border-color:var(--accent); }
+  .actBadge { color:var(--accent); font-size:12px; }
+  .actionsGroup { margin-top:12px; }
+
+  /* --- Journal --- */
+  .journalEntry { border:1px solid var(--bd); border-radius:8px; padding:8px; margin-bottom:8px; background:var(--chip); }
+  .journalEntryHeader { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px; }
+  .journalEntryHeader .inp { width:170px; }
+
+  /* --- Search --- */
+  .searchWrap { position:relative; }
+  .searchPanel {
+    position:absolute; top:calc(100% + 4px); right:0; width:min(380px, 92vw);
+    background:var(--card-bg); color:var(--tx); border:1px solid var(--bd);
+    border-radius:8px; padding:8px; z-index:70; box-shadow:0 4px 14px rgba(0,0,0,0.25);
+  }
+  .searchResults { max-height:340px; overflow-y:auto; margin-top:6px; }
+  .searchResult { padding:6px 8px; border-radius:6px; cursor:pointer; }
+  .searchResult:hover, .searchResult.sel { background:var(--btn-hover); }
+  .srCrumb { font-size:10px; text-transform:uppercase; letter-spacing:0.7px; color:var(--mut); }
+  .srLabel { font-size:13px; font-weight:600; }
+  .srSnippet { font-size:11.5px; color:var(--mut); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .searchHit { animation:searchFlash 1.6s ease-out; }
+  @keyframes searchFlash { 0% { box-shadow:0 0 0 3px var(--accent); } 100% { box-shadow:0 0 0 3px transparent; } }
+
+  /* --- Dice dropdown --- */
+  .diceWrap { position:relative; display:inline-block; }
+  .dice-dropdown {
+    position:absolute; top:calc(100% + 4px); left:0; min-width:170px;
+    background:var(--card-bg); color:var(--tx); border:1px solid var(--bd);
+    border-radius:8px; padding:4px; z-index:60; box-shadow:0 4px 14px rgba(0,0,0,0.2);
+  }
+  .dice-row { display:flex; justify-content:space-between; align-items:center; padding:6px 10px; cursor:pointer; border-radius:6px; user-select:none; font-family:Georgia,'Palatino Linotype',serif; }
+  .dice-row:hover { background:var(--btn-hover); }
+  .dice-count { font-weight:bold; color:var(--mut); min-width:20px; text-align:right; }
+  .dice-actions { display:flex; gap:6px; padding:6px 4px 4px; margin-top:4px; border-top:1px solid var(--bd); }
+  .dice-actions .btn { flex:1; background:var(--card-bg); border-color:var(--bd); color:var(--tx); }
+  .dice-actions .btn:hover { background:var(--btn-hover); }
+  .dice-actions .btn.dice-roll { background:var(--accent); border-color:var(--accent); color:var(--accent-tx); }
+`;
+
+function charMetaText() {
+  var bits = [];
+  if (ch.level) bits.push('Level ' + ch.level);
+  if (ch.race) bits.push(ch.race);
+  if (ch.class) bits.push(ch.class);
+  if (ch.background) bits.push(ch.background);
+  if (ch.alignment) bits.push(ch.alignment);
+  return bits.length ? bits.join(' • ') : 'Click Edit to fill in this character';
+}
+
+// Parse "2d6+1d4+3"-style expressions into 3D-roller dice counts + flat modifier.
+// Returns null when the expression can't be animated (no dice, unsupported die
+// types, negative dice terms, or an absurd number of dice) — callers fall back
+// to the text roller.
+function parseDiceExpr(expr) {
+  var s = String(expr == null ? '' : expr).replace(/\s+/g, '');
+  if (!s) return null;
+  if (!/^[+-]?(?:\d*d\d+|\d+)(?:[+-](?:\d*d\d+|\d+))*$/i.test(s)) return null;
+  if (!/^[+-]/.test(s)) s = '+' + s;
+  var counts = { d4: 0, d6: 0, d8: 0, d10: 0, d12: 0, d20: 0 };
+  var mod = 0, diceCount = 0;
+  var re = /([+-])(\d*d\d+|\d+)/gi, m;
+  while ((m = re.exec(s)) !== null) {
+    var sign = m[1] === '-' ? -1 : 1;
+    var term = m[2].toLowerCase();
+    if (term.indexOf('d') !== -1) {
+      if (sign < 0) return null;
+      var dm = /^(\d*)d(\d+)$/.exec(term);
+      var n = dm[1] ? parseInt(dm[1], 10) : 1;
+      var key = 'd' + dm[2];
+      if (!(key in counts) || n < 1) return null;
+      counts[key] += n;
+      diceCount += n;
+    } else {
+      mod += sign * parseInt(term, 10);
+    }
+  }
+  if (!diceCount || diceCount > 10) return null;
+  return { counts: counts, mod: mod };
+}
+
+// Does the text contain at least one rollable dice term (any die size)?
+function containsDice(v) {
+  return /(?:^|[+\-])\d*d\d+/i.test(String(v == null ? '' : v).replace(/\s+/g, ''));
+}
+
+// Is the text a plain integer modifier like "+5", "-1", "3"?
+function isRollableMod(v) {
+  return /^[+-]?\d+$/.test(String(v == null ? '' : v).trim());
+}
+
+// ---- Play session (rolls are logged to a journal entry while active) ----
+var session = null; // { title, date, lines: [] }
+var healAmount = 1;
+var playSaveTimer = null;
+
+function sessionStorageKey() { return 'dnd.session.' + (currentNoteId || 'unknown'); }
+function loadSessionState() {
+  try { session = JSON.parse(localStorage.getItem(sessionStorageKey()) || 'null'); }
+  catch { session = null; }
+  if (session && !Array.isArray(session.lines)) session.lines = [];
+}
+function saveSessionState() {
+  try {
+    if (session) localStorage.setItem(sessionStorageKey(), JSON.stringify(session));
+    else localStorage.removeItem(sessionStorageKey());
+  } catch {}
+}
+
+// Journal entries live as notes in a "Character Journal" notebook inside the
+// character's folder; the sheet's Journal tab lists them via the host.
+var journalNotes = [];   // [{id, title, date}]
+var journalEntry = null; // entry of the journal NOTE currently shown (journal view)
+var journalNoteId = null;
+
+function logSession(text) {
+  if (!session) return;
+  var t = new Date();
+  var hh = ('0' + t.getHours()).slice(-2), mm = ('0' + t.getMinutes()).slice(-2);
+  session.lines.push('[' + hh + ':' + mm + '] ' + text);
+  saveSessionState();
+  renderJournal();
+}
+
+function postSave() {
+  if (api) api.postMessage({ type: 'save', character: ch });
+  else saveLocal(ch);
+}
+
+// Debounced save for play-mode interactions (heal/damage clicks)
+function schedulePlaySave() {
+  if (playSaveTimer) clearTimeout(playSaveTimer);
+  playSaveTimer = setTimeout(function () { playSaveTimer = null; postSave(); }, 900);
+}
+
+function startSession() {
+  var titles = journalNotes.map(function (n) { return n.title; })
+    .concat((ch.journal || []).map(function (e) { return (e && e.title) || ''; }));
+  var maxN = 0;
+  titles.forEach(function (t) {
+    var m = /^Session (\d+)/.exec(String(t || ''));
+    if (m) maxN = Math.max(maxN, parseInt(m[1], 10));
+  });
+  var date = new Date().toISOString().slice(0, 10);
+  session = { title: 'Session ' + (maxN + 1) + ' - ' + date, date: date, lines: [] };
+  saveSessionState();
+  buildUI();
+  setStatus(session.title + ' started — dice rolls will be logged to the journal');
+}
+
+function endSession() {
+  if (!session) return;
+  var entry = {
+    title: session.title,
+    date: session.date,
+    character: ch.name || '',
+    log: session.lines.slice(),
+    text: '',
+  };
+  session = null;
+  saveSessionState();
+  if (api) {
+    api.postMessage({ type: 'journalCreate', entry: entry });
+  } else {
+    // Offline fallback: keep the entry embedded in the sheet
+    ch.journal = ch.journal || [];
+    ch.journal.unshift({ title: entry.title, date: entry.date, text: entry.log.join('\n') });
+    saveLocal(ch);
+  }
+  buildUI();
+  setStatus(entry.title + ' ended — saving log to the Character Journal…');
+}
+
+function rollTo(expr, label) {
+  var parsed = parseDiceExpr(expr);
+  if (parsed && diceRenderer) {
+    diceRenderer.roll(function (sum, breakdown) {
+      var total = sum + parsed.mod;
+      var parts = Object.keys(breakdown).map(function (t) {
+        return t + ' [' + breakdown[t].join(', ') + ']';
+      });
+      if (parsed.mod) parts.push(parsed.mod > 0 ? '+' + parsed.mod : String(parsed.mod));
+      var text = (label ? label + ': ' : 'Roll: ') + total + ' (' + parts.join(' ') + ')';
+      setStatus(text, 0);
+      logSession(text);
+    }, parsed.counts);
+    return;
+  }
+  // Text fallback: handles odd dice (d3, d100), negative dice terms, huge pools
+  var r = rollCompositeDamage(String(expr || '0'));
+  var text = (label ? label + ': ' : 'Roll: ') + r.total + ' (' + r.detail + ')';
+  setStatus(text, 0);
+  logSession(text);
+}
+
+// Track the document-level dice-dropdown close handler across rebuilds
+var docCloseDiceDropdown = null;
+var docCloseSearch = null;
+
+// ---- Search & Query ----
+var ABILITY_FULLNAMES = {
+  STR: 'Strength', DEX: 'Dexterity', CON: 'Constitution',
+  INT: 'Intelligence', WIS: 'Wisdom', CHA: 'Charisma',
+};
+
+// Build a flat, searchable index of the whole sheet. nav describes how to get
+// to the entry: tab to open, rowkey/expand for collapsible rows, elId for
+// always-visible sheet elements.
+function buildSearchIndex() {
+  var idx = [];
+  function add(tab, tabLabel, table, label, textParts, nav) {
+    label = String(label || '').trim();
+    if (!label) return;
+    idx.push({
+      tab: tab, tabLabel: tabLabel, table: table, label: label,
+      text: textParts.filter(Boolean).map(String).join(' \n '),
+      nav: nav || {},
+    });
+  }
+
+  (ch.attacks || []).forEach(function (a, i) {
+    add('actions', 'Actions', 'Attacks', a.name, [a.name, a.range, a.hitDc, a.damage, a.notes], { rowkey: 'atk:' + i });
+  });
+  (ch.spells || []).forEach(function (sp, i) {
+    add('spells', 'Spells', 'Spells', sp.name, [sp.name, sp.range, sp.hitDc, sp.damage, sp.notes], { rowkey: 'spell:' + i, expand: 'spell:' + i });
+  });
+  (ch.inventory || []).forEach(function (it, i) {
+    add('inventory', 'Inventory', 'Items', it.name, [it.name, it.value, it.desc, it.notes], { rowkey: 'inv:' + i, expand: 'inv:' + i });
+  });
+  (ch.features || []).forEach(function (ft, i) {
+    add('features', 'Features', featureSection(ft && ft.source), ft.name, [ft.name, ft.source, ft.notes], { rowkey: 'feat:' + i, expand: 'feat:' + i });
+  });
+  if (ch.notes) {
+    add('notes', 'Notes', 'Notes', String(ch.notes).split('\n')[0].slice(0, 60), [ch.notes], {});
+  }
+  (journalNotes || []).forEach(function (n, i) {
+    add('journal', 'Journal', 'Character Journal', n.title, [n.title, n.date], { rowkey: 'jnote:' + i });
+  });
+  (ch.journal || []).forEach(function (e, i) {
+    add('journal', 'Journal', 'Legacy Entries', (e && (e.title || e.date)) || 'Entry', [e && e.title, e && e.date, e && e.text], {});
+  });
+
+  // Always-visible sheet stats
+  SKILLS.forEach(function (sk) {
+    add(null, 'Sheet', 'Skills', sk, [sk, SKILL_TO_ABILITY[sk], ABILITY_FULLNAMES[SKILL_TO_ABILITY[sk]]], { elId: 'skill.total.' + sk });
+  });
+  ABILITIES.forEach(function (a) {
+    add(null, 'Sheet', 'Abilities', a, [a, ABILITY_FULLNAMES[a]], { elId: 'abil.mod.' + a });
+    add(null, 'Sheet', 'Saving Throws', a + ' save', [a + ' save', ABILITY_FULLNAMES[a] + ' saving throw'], { elId: 'save.total.' + a });
+  });
+  return idx;
+}
+
+function searchSnippet(text, q) {
+  var i = text.toLowerCase().indexOf(q);
+  if (i === -1) return '';
+  var start = Math.max(0, i - 28);
+  return (start > 0 ? '…' : '') + text.slice(start, i + q.length + 60).replace(/\s+/g, ' ').trim() + '…';
+}
+
+function searchSheet(query) {
+  var q = String(query || '').trim().toLowerCase();
+  if (q.length < 2) return [];
+  var hits = [];
+  buildSearchIndex().forEach(function (e) {
+    var inLabel = e.label.toLowerCase().indexOf(q) !== -1;
+    var inText = e.text.toLowerCase().indexOf(q) !== -1;
+    if (!inLabel && !inText) return;
+    hits.push({ e: e, rank: inLabel ? 0 : 1, snippet: inLabel ? '' : searchSnippet(e.text, q) });
+  });
+  hits.sort(function (a, b) { return a.rank - b.rank; });
+  return hits.slice(0, 30);
+}
+
+// Navigate to a search result: switch tab, expand the row, scroll + flash.
+function gotoSearchResult(hit) {
+  var e = hit.e;
+  if (e.nav.expand) expandedRows[e.nav.expand] = true;
+  if (e.tab) {
+    var tb = document.querySelector('.tabBar .tabBtn[data-tab="' + e.tab + '"]');
+    if (tb) tb.click(); // switches tab + re-renders all lists
+  }
+  var el = null;
+  if (e.nav.elId) el = document.getElementById(e.nav.elId);
+  else if (e.nav.rowkey) el = document.querySelector('[data-rowkey="' + e.nav.rowkey + '"]');
+  else if (e.tab) el = document.querySelector('.tabSection[data-tabid="' + e.tab + '"]');
+  if (!el) return;
+  var target = el.closest && (el.closest('.skillRow, .saveItem, .abilityBox, .rowWrap, .rowGrid, .journalRow') || el) || el;
+  if (typeof target.scrollIntoView === 'function') {
+    try { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { try { target.scrollIntoView(); } catch {} }
+  }
+  target.classList.remove('searchHit');
+  void target.offsetWidth; // restart the animation
+  target.classList.add('searchHit');
+  setTimeout(function () { target.classList.remove('searchHit'); }, 1800);
+}
+
+function makeSearchWidget() {
+  var wrapEl = h('div', { class: 'searchWrap' });
+  var btn = h('button', { class: 'btn', title: 'Search character sheet' }, ['🔍']);
+  var panel = h('div', { class: 'searchPanel', style: { display: 'none' } });
+  var input = h('input', { class: 'inp playInput', placeholder: 'Search your sheet…' });
+  var results = h('div', { class: 'searchResults' });
+  panel.appendChild(input);
+  panel.appendChild(results);
+  var selIndex = -1;
+  var currentHits = [];
+
+  function close() { panel.style.display = 'none'; }
+  function renderResults() {
+    currentHits = searchSheet(input.value);
+    selIndex = -1;
+    results.innerHTML = '';
+    if (!currentHits.length) {
+      if (String(input.value).trim().length >= 2) {
+        results.appendChild(h('div', { class: 'emptyHint' }, ['No matches.']));
+      }
+      return;
+    }
+    currentHits.forEach(function (hit, i) {
+      var row = h('div', { class: 'searchResult' }, [
+        h('div', { class: 'srCrumb' }, [hit.e.tabLabel + ' › ' + hit.e.table]),
+        h('div', { class: 'srLabel' }, [hit.e.label]),
+      ]);
+      if (hit.snippet) row.appendChild(h('div', { class: 'srSnippet' }, [hit.snippet]));
+      row.addEventListener('click', function () { close(); gotoSearchResult(hit); });
+      results.appendChild(row);
+    });
+  }
+  function updateSel() {
+    Array.from(results.querySelectorAll('.searchResult')).forEach(function (r, i) {
+      r.classList.toggle('sel', i === selIndex);
+      if (i === selIndex && typeof r.scrollIntoView === 'function') r.scrollIntoView({ block: 'nearest' });
+    });
+  }
+
+  btn.addEventListener('click', function (ev) {
+    ev.stopPropagation();
+    var opening = panel.style.display === 'none';
+    panel.style.display = opening ? 'block' : 'none';
+    if (opening) { input.focus(); renderResults(); }
+  });
+  panel.addEventListener('click', function (ev) { ev.stopPropagation(); });
+  input.addEventListener('input', renderResults);
+  input.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') { close(); return; }
+    if (ev.key === 'ArrowDown') { ev.preventDefault(); selIndex = Math.min(currentHits.length - 1, selIndex + 1); updateSel(); return; }
+    if (ev.key === 'ArrowUp') { ev.preventDefault(); selIndex = Math.max(0, selIndex - 1); updateSel(); return; }
+    if (ev.key === 'Enter' && currentHits.length) {
+      var hit = currentHits[selIndex >= 0 ? selIndex : 0];
+      close();
+      gotoSearchResult(hit);
+    }
+  });
+  if (docCloseSearch) document.removeEventListener('click', docCloseSearch);
+  docCloseSearch = close;
+  document.addEventListener('click', docCloseSearch);
+
+  wrapEl.appendChild(btn);
+  wrapEl.appendChild(panel);
+  return wrapEl;
+}
+
 function buildUI() {
   var root = document.getElementById('root');
   if (!root) return;
 
-  // Styles
-  var style = document.createElement('style');
-  style.textContent = `
-    :root { --bd:#d0d4db; --tx:#101216; --mut:#5a6270; --bg:#ffffff; --chip:#f5f7fa; --card-bg:#ffffff; --btn-hover:#f9fafb; --tab-active-bg:#eef3ff; --tab-active-bd:#88aaff; --dot-on-bg:#222; --dot-on-tx:#fff; }
-    * { box-sizing: border-box; }
-    html, body { height: 100%; }
-    body { margin:0; background: var(--bg); color: var(--tx); font: 14px/1.35 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; overflow-y: auto; }
-    #root { min-height: 100%; }
-    .wrap { min-height: 100%; }
-    .wrap { padding: 12px; }
-    h2 { margin: 16px 0 8px; font-size: 16px; }
-    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .grid3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
-    /* Unified tile grid */
-    .tileGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; align-items: start; }
-    .card { border: 1px solid var(--bd); border-radius: 10px; padding: 10px; background: var(--card-bg); position: relative; }
-    .card.drag-over-left   { box-shadow: inset 4px 0 0 #88aaff; }
-    .card.drag-over-right  { box-shadow: inset -4px 0 0 #88aaff; }
-    .card.drag-over-top    { box-shadow: inset 0 4px 0 #88aaff; }
-    .card.drag-over-bottom { box-shadow: inset 0 -4px 0 #88aaff; }
-    .drag-grip { cursor: grab; margin-right: 6px; opacity: 0.35; user-select: none; font-size: 14px; }
-    .drag-grip:hover { opacity: 0.8; }
-    .tile-resize-handle {
-      position: absolute; right: 2px; bottom: 2px;
-      width: 18px; height: 18px; line-height: 18px; text-align: center;
-      cursor: nwse-resize; opacity: 0.3; font-size: 12px; user-select: none;
-      color: var(--mut);
-    }
-    .tile-resize-handle:hover { opacity: 0.7; }
-    .lbl { display:block; }
-    .lblt { font-size: 11px; color: var(--mut); margin-bottom: 4px; }
-    .inp, .sel, textarea { width: 100%; padding: 8px; border: 1px solid var(--bd); border-radius: 8px; background: var(--card-bg); color: var(--tx); }
-    textarea { min-height: 80px; resize: vertical; }
-    .row { display:flex; gap:8px; align-items:center; }
-    .mut { color: var(--mut); }
-    .chip { background: var(--chip); border:1px solid var(--bd); padding:6px 8px; border-radius: 8px; }
-    .skills { display: grid; grid-template-columns: 1fr auto auto; gap: 6px 8px; align-items: center; }
-    .skillHead { font-size: 12px; color:var(--mut); display: contents; }
-    .btn { border:1px solid var(--bd); background:var(--card-bg); color:var(--tx); padding:8px 10px; border-radius: 8px; cursor:pointer; }
-    .btn:hover { background:var(--btn-hover); }
-    .btn.small { padding:4px 6px; font-size:12px; }
-    .right { text-align: right; }
-    .status { margin-left: 8px; color: var(--mut); }
-    .attacks .hdr, .attacks .row {
-        display: grid;
-        grid-template-columns: 1.2fr 100px 100px 1fr 1fr max-content; /* Attack | Range | Hit/DC | Damage | Notes | ✕ */
-        gap: 6px;
-        align-items: center;
-    }
-    .attacks .hdr { color: var(--mut); font-size:12px; }
-    .attack-roll-btn { white-space: nowrap; }
-
-    /* Top bar (left: roll/load/save, right: tabs) */
-    .topbar {
-      position: sticky; top: 0; z-index: 10;
-      display: flex; justify-content: space-between; align-items: center;
-      margin-bottom: 8px; padding-top: 8px; background: var(--bg);
-    }
-    .topbar .leftActions, .topbar .rightActions {
-      display: flex; align-items: center; gap: 8px;
-    }
-    .tab.btn {} /* inherits .btn */
-    .tab.btn.active { box-shadow: 0 1px 4px rgba(0,0,0,0.12); background:var(--tab-active-bg); border-color:var(--tab-active-bd); }
-
-    /* Dice dropdown */
-    .diceWrap { position: relative; display: inline-block; }
-    .dice-dropdown {
-      position: absolute; top: calc(100% + 4px); left: 0;
-      min-width: 160px; background: var(--card-bg); border: 1px solid var(--bd);
-      border-radius: 8px; padding: 4px; z-index: 20;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
-    .dice-row {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 6px 10px; cursor: pointer; border-radius: 6px; user-select: none;
-      font-family: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
-    }
-    .dice-row:hover { background: var(--btn-hover); }
-    .dice-count { font-weight: bold; color: var(--mut); min-width: 20px; text-align: right; }
-    .dice-actions {
-      display: flex; gap: 6px; padding: 6px 4px 4px 4px; margin-top: 4px;
-      border-top: 1px solid var(--bd);
-    }
-    .dice-actions .btn { flex: 1; }
-    .dice-roll { background: var(--tab-active-bg); border-color: var(--tab-active-bd); }
-
-    /* Legacy rightCol no longer used */
-
-    /* Keep skill prof selects compact and stable */
-    .skills select, .skills .sel {
-      width: 88px !important; min-width: 88px !important; max-width: 88px !important;
-      flex: 0 0 88px; justify-self: start;
-    }
-    .skills { grid-template-columns: 1fr max-content max-content; }
-
-    /* Saving throws compactness */
-    .saving-throws-grid .row { gap: 6px; }
-    .saving-throws-grid .mut { white-space: nowrap; }
-
-    /* Tighten first card header spacing */
-    .card h2:first-child { margin-top: 0; }
-  `;
-  style.textContent += `
-  /* Abilities+Saves combined grid — columns set dynamically by applyLayout */
-  .grid6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
-  .grid6.cols-3 { grid-template-columns: repeat(3, 1fr); }
-  .grid6.cols-2 { grid-template-columns: repeat(2, 1fr); }
-  .grid6.cols-1 { grid-template-columns: 1fr; }
-  .abilCol .lbl { margin-bottom: 6px; }
-  .abilCol .row { justify-content: space-between; }
-  .abilCol .row .mut { min-width: 42px; text-align: right; }
-
-  /* Attacks table: header + rows share the same columns */
-  .attacks .header,
-  .attacks .rowGrid {
-    display: grid;
-    grid-template-columns: 1.2fr 100px 100px 1fr 1fr max-content; /* Attack | Range | Hit/DC | Damage | Notes | ✕ */
-    gap: 6px;
-    align-items: center;
+  // (Re)install stylesheet without stacking duplicates on rebuilds
+  var style = document.getElementById('dnd-style');
+  if (!style) {
+    style = document.createElement('style');
+    style.id = 'dnd-style';
+    document.head.appendChild(style);
   }
-  .attacks .header {
-    color: var(--mut);
-    font-size: 12px;
-    margin-bottom: 6px;
-  }
-
-  /* Input+button inline for Hit/DC and Damage cells */
-  .cell-inline { display: flex; align-items: center; gap: 6px; }
-
-  /* Smaller dice buttons */
-  .attack-roll-btn {
-    padding: 2px 6px;
-    font-size: 12px;
-    line-height: 1;
-    border-radius: 6px;
-  }
-`;
-// Replace your previous Skills CSS block with this:
-style.textContent += `
-  /* Skills container should NOT be a grid */
-  .skillsTable { display: block; }
-
-  /* Header and each row share the same 3-column grid */
-  .skillsHeader,
-  .skillRow {
-    display: grid;
-    grid-template-columns: 1fr max-content max-content; /* Skill | Total | Prof */
-    gap: 6px 8px;
-    align-items: center;
-  }
-
-  .skillsHeader {
-    color: var(--mut);
-    font-size: 12px;
-    margin-bottom: 6px;
-  }
-
-  .skillRow .right { text-align: right; }
-
-  .skillTotalWrap {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    justify-content: flex-end;
-  }
-
-  /* Keep the small dropdowns compact */
-  .skillsTable select,
-  .skillsTable .sel {
-    width: 88px !important; min-width: 88px !important; max-width: 88px !important;
-    flex: 0 0 88px; justify-self: start;
-  }
-`;
-style.textContent += `
-  /* Spells table mirrors Attacks */
-  .spells .header,
-  .spells .rowGrid {
-    display: grid;
-    grid-template-columns: 1.2fr 100px 100px 1fr 1fr max-content; /* Spell | Range | Hit/DC | Damage | Notes | ✕ */
-    gap: 6px;
-    align-items: center;
-  }
-  .spells .header { color: var(--mut); font-size: 12px; margin-bottom: 6px; }
-
-  /* Inventory table */
-  .inventory .header {
-    display: grid;
-    grid-template-columns: 1.2fr 120px max-content; /* Name | Value | ✕ */
-    gap: 6px;
-    align-items: center;
-  }
-  .inventory .header { color: var(--mut); font-size: 12px; margin-bottom: 6px; }
-  
-  .inventory .itemRow {
-    border: 1px solid var(--bd);
-    border-radius: 8px;
-    padding: 8px;
-    margin-bottom: 8px;
-    background: var(--card-bg);
-  }
-  
-  .inventory .itemTopRow {
-    display: grid;
-    grid-template-columns: 1.2fr 120px max-content; /* Name | Value | ✕ */
-    gap: 6px;
-    align-items: center;
-    margin-bottom: 6px;
-  }
-  
-  .inventory .itemDescription {
-    width: 100%;
-    margin-top: 4px;
-  }
-  
-  .inventory .itemDescription textarea {
-    min-height: 60px;
-    resize: vertical;
-  }
-
-  /* Journal entries */
-  .journal .journalEntry {
-    border: 1px solid var(--bd);
-    border-radius: 8px;
-    padding: 8px;
-    margin-bottom: 8px;
-    background: var(--card-bg);
-  }
-  .journal .journalEntryHeader {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 6px;
-  }
-  .journal .journalEntryBody textarea {
-    min-height: 80px;
-    resize: vertical;
-  }
-`;
-
-style.textContent += `
-.spellcasting { display: grid; grid-template-columns: 1fr; gap: 10px; }
-.spellcasting .grid { display: grid; grid-template-columns: 60px 80px 80px 1fr; gap: 6px; align-items: center; }
-.spellcasting .hdr { color: var(--mut); font-size: 12px; }
-.slotDots { display:flex; flex-wrap: wrap; gap: 4px; }
-.dot { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--bd); display:inline-flex; align-items:center; justify-content:center; cursor:pointer; font-size:10px; user-select:none; }
-.dot.on  { background:var(--dot-on-bg); color:var(--dot-on-tx); }
-.dot.off { background:var(--card-bg); }
-.inline { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-`;
-
-style.textContent += `
-.spellcasting { display: grid; grid-template-columns: 1fr; gap: 10px; }
-.spellcasting .grid { display: grid; grid-template-columns: 60px 80px 80px 1fr; gap: 6px; align-items: center; }
-.spellcasting .hdr { color: var(--mut); font-size: 12px; }
-.slotDots { display:flex; flex-wrap: wrap; gap: 4px; }
-.dot { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--bd); display:inline-flex; align-items:center; justify-content:center; cursor:pointer; font-size:10px; user-select:none; }
-.dot.on  { background:var(--dot-on-bg); color:var(--dot-on-tx); }
-.dot.off { background:var(--card-bg); }
-.inline { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-`;
-
-
-  document.head.appendChild(style);
+  style.textContent = SHEET_CSS;
 
   // Apply cached theme immediately to avoid flash of default colors
   applyTheme(localStorage.getItem('dnd.theme') || 'light');
 
-  // Build unified tile grid
-  var tileGrid = h('div', { class: 'tileGrid' });
+  var sheet = h('div', { class: 'sheet ' + (isEditing ? 'editing' : 'viewing') });
 
-  // Identity
-  var identity = h('div', { class: 'card' }, [
-    h('h2', {}, ['Identity']),
-    labeledInput('Name', 'name', ch.name, function (v) { return update({ name: v }); }),
-    h('div', { class: 'grid2' }, [
-      labeledInput('Class', 'class', ch.class, function (v) { return update({ class: v }); }),
-      labeledNumber('Level', 'level', ch.level, function (v) { return update({ level: clamp(v, 1, 20) }); }, 1, 20),
-    ]),
-    h('div', { class: 'grid3' }, [
-      labeledInput('Race', 'race', ch.race || '', function (v) { return update({ race: v }); }),
-      labeledInput('Background', 'background', ch.background || '', function (v) { return update({ background: v }); }),
-      labeledInput('Alignment', 'alignment', ch.alignment || '', function (v) { return update({ alignment: v }); }),
-    ]),
-  ]);
+  // ===== Header banner =====
+  function makeDiceWidget() {
+    var diceWrap = h('div', { class: 'diceWrap' });
+    var diceBtn = h('button', { class: 'btn' }, ['🎲 Dice']);
+    var dropdown = h('div', { class: 'dice-dropdown', style: { display: 'none' } });
+    var counts = { d4: 0, d6: 0, d8: 0, d10: 0, d12: 0, d20: 0 };
+    var DIE_TYPES = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
 
-  // Abilities + Saves (combined)
-  var abilities = h('div', { class: 'card abilities' });
-  abilities.appendChild(h('h2', {}, ['Abilities']));
-  // Single row of 6 abilities, each column includes ability input and its save row beneath
-  var abilGrid = h('div', { class: 'grid6' });
-  // Add CSS for grid6 later in styles block
-  ABILITIES.forEach(function (a) {
-    var col = h('div', { class: 'abilCol' });
-    var score = labeledNumber(`${a} (mod ${fmtSigned(derived.mods[a])})`, `abil.${a}`, ch.abilities[a],
-      function (v) { return updateDeep(`abilities.${a}`, clamp(v, 1, 30)); }, 1, 30);
-    score.setAttribute('data-ability', a);
-    attachAbilityTooltip(score, a);
-    // Save row under this ability
-    var saveRow = h('div', { class: 'row chip' }, [
-      h('input', { type: 'checkbox', checked: !!ch.savingThrowsProficiencies[a] }),
-      h('div', {}, ['Save']),
-      h('div', { class: 'mut' }, [h('span', { id: `save.total.${a}` }, [fmtSigned(derived.savingThrows[a])])]),
-    ]);
-    saveRow.firstChild.addEventListener('change', function (ev) {
-      var on = ev.target.checked;
-      updateDeep(`savingThrowsProficiencies.${a}`, on);
-    });
-    col.appendChild(score);
-    col.appendChild(saveRow);
-    abilGrid.appendChild(col);
-  });
-  abilities.appendChild(abilGrid);
-
-  // Combat
-  var combat = h('div', { class: 'card' }, [
-    h('h2', {}, ['Combat']),
-    h('div', { class: 'grid3' }, [
-      labeledNumber('Armor Class', 'ac', ch.armorClass, function (v) { return update({ armorClass: clamp(v, 0, 40) }); }, 0, 40),
-      labeledNumber('HP (max)', 'hp.max', ch.maxHP, function (v) { return update({ maxHP: Math.max(1, v) }); }, 1),
-      labeledNumber('HP (current)', 'hp.cur', ch.currentHP, function (v) { return update({ currentHP: clamp(v, 0, ch.maxHP) }); }, 0),
-    ]),
-    h('div', { class: 'grid3', style: { marginTop: '6px' } }, [
-      labeledInput('Speed', 'speed', ch.speed || '', function (v) { return update({ speed: v }); }),
-      labeledNumber('Temp HP', 'hp.temp', ch.tempHP || 0, function (v) { return update({ tempHP: Math.max(0, v) }); }, 0),
-      h('label', { class: 'lbl' }, [
-        h('div', { class: 'lblt' }, ['Initiative']),
-        h('div', { class: 'chip' }, [h('span', { id: 'derived.initiative' }, [fmtSigned(derived.initiative)]), ' (DEX mod)']),
-      ]),
-    ]),
-    h('div', { class: 'row', style: { marginTop: '6px' } }, [
-      h('div', { class: 'chip' }, ['Prof bonus: ', h('strong', { id: 'derived.pb' }, [fmtSigned(derived.proficiencyBonus)])]),
-      h('div', { class: 'chip' }, ['Passive Perception: ', h('strong', { id: 'derived.pp' }, [String(derived.passivePerception)])]),
-    ]),
-  ]);
-
-  // Set data-panel on top tiles
-  identity.setAttribute('data-panel', 'identity');
-  combat.setAttribute('data-panel', 'combat');
-  abilities.setAttribute('data-panel', 'abilities');
-
-  // Right-side cards
-    //Skills tab
-    var skillsCard = h('div', { class: 'card' });
-    skillsCard.appendChild(h('h2', {}, ['Skills']));
-
-    var skillsTable = h('div', { class: 'skillsTable' });
-
-    // Header row (three actual cells)
-    var skillsHeader = h('div', { class: 'skillsHeader' }, [
-    h('div', {}, ['Skill']),
-    h('div', { class: 'right' }, ['Total']),
-    h('div', {}, ['Prof']),
-    ]);
-    skillsTable.appendChild(skillsHeader);
-
-    // Rows
-    SKILLS.forEach(function (sk) {
-    var abil = SKILL_TO_ABILITY[sk];
-
-    // name cell: "Stealth (DEX)"
-    var nameCell = h('div', {}, [
-        `${sk} `,
-        h('span', { class: 'mut' }, [`(${abil})`])
-    ]);
-
-    // total cell: value + tiny roll button
-    var totalEl  = h('div', { id: `skill.total.${sk}`, class: 'right' }, [fmtSigned(derived.skills[sk])]);
-    var rollBtn  = h('button', { class: 'btn small', title: 'Roll skill' }, ['🎲']);
-    var totalWrap = h('div', { class: 'skillTotalWrap' }, [totalEl, rollBtn]);
-
-    rollBtn.addEventListener('click', function () {
-        var expr = `1d20${signed(derived.skills[sk])}`;
-        if (api) api.postMessage({ type: 'roll', expr });
-        else {
-        var r = rollExpr(expr);
-        setStatus(`Roll ${sk}: ${r.total} (${r.detail})`, 4000);
+    function renderDropdown() {
+      dropdown.innerHTML = '';
+      DIE_TYPES.forEach(function (type) {
+        var countSpan = h('span', { class: 'dice-count' }, [String(counts[type])]);
+        var row = h('div', { class: 'dice-row' }, [h('span', {}, [type]), countSpan]);
+        row.addEventListener('click', function (e) {
+          e.stopPropagation();
+          counts[type]++;
+          countSpan.textContent = String(counts[type]);
+        });
+        dropdown.appendChild(row);
+      });
+      var actions = h('div', { class: 'dice-actions' });
+      var resetBtn = h('button', { class: 'btn small' }, ['Reset']);
+      var rollBtn = h('button', { class: 'btn small dice-roll' }, ['Roll']);
+      resetBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        DIE_TYPES.forEach(function (t) { counts[t] = 0; });
+        renderDropdown();
+      });
+      rollBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var total = DIE_TYPES.reduce(function (a, t) { return a + counts[t]; }, 0);
+        if (total === 0) { setStatus('No dice selected'); return; }
+        var rollCounts = Object.assign({}, counts);
+        dropdown.style.display = 'none';
+        DIE_TYPES.forEach(function (t) { counts[t] = 0; });
+        renderDropdown();
+        if (diceRenderer) {
+          diceRenderer.roll(function (sum, breakdown) {
+            var parts = DIE_TYPES.filter(function (t) { return breakdown[t]; }).map(function (t) {
+              return t + ': ' + breakdown[t].join('+');
+            });
+            var text = 'Roll: ' + sum + ' (' + parts.join(', ') + ')';
+            setStatus(text, 0);
+            logSession(text);
+          }, rollCounts);
+        } else {
+          setStatus('Dice renderer unavailable');
         }
+      });
+      actions.appendChild(resetBtn);
+      actions.appendChild(rollBtn);
+      dropdown.appendChild(actions);
+    }
+    renderDropdown();
+
+    diceBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
     });
+    dropdown.addEventListener('click', function (e) { e.stopPropagation(); });
+    if (docCloseDiceDropdown) document.removeEventListener('click', docCloseDiceDropdown);
+    docCloseDiceDropdown = function () { dropdown.style.display = 'none'; };
+    document.addEventListener('click', docCloseDiceDropdown);
 
-    // prof select
-    var sel = selectProf(ch.skillsProficiencies[sk] || 'none',
-        function (p) { return updateDeep(`skillsProficiencies.${sk}`, p); });
+    diceWrap.appendChild(diceBtn);
+    diceWrap.appendChild(dropdown);
+    return diceWrap;
+  }
 
-    // assemble row (three cells)
-    var row = h('div', { class: 'skillRow' }, [nameCell, totalWrap, sel]);
-    skillsTable.appendChild(row);
+  var headerActions = h('div', { class: 'headerActions' });
+  headerActions.appendChild(makeSearchWidget());
+  headerActions.appendChild(makeDiceWidget());
+  if (!isEditing) {
+    var sessBtn;
+    if (!session) {
+      sessBtn = h('button', { class: 'btn', title: 'Start a play session — dice rolls get logged to a journal entry' }, ['▶ Session']);
+      sessBtn.addEventListener('click', startSession);
+    } else {
+      sessBtn = h('button', { class: 'btn', title: 'End "' + session.title + '" and save the roll log to the journal' }, ['■ End Session']);
+      sessBtn.addEventListener('click', endSession);
+    }
+    headerActions.appendChild(sessBtn);
+    if (ch.ddbId != null) {
+      var syncBtn = h('button', { class: 'btn', title: 'Re-sync this character from D&D Beyond (keeps journal, notes and expended slots)' }, ['↻ Sync']);
+      syncBtn.addEventListener('click', function () {
+        if (api) { api.postMessage({ type: 'ddbSync' }); setStatus('Syncing from D&D Beyond…'); }
+        else setStatus('Sync requires the Joplin host');
+      });
+      headerActions.appendChild(syncBtn);
+    }
+    var editBtn = h('button', { class: 'btn primary' }, ['Edit']);
+    editBtn.addEventListener('click', function () { isEditing = true; buildUI(); });
+    headerActions.appendChild(editBtn);
+  } else {
+    var saveBtn = h('button', { class: 'btn primary' }, ['Save']);
+    saveBtn.addEventListener('click', function () {
+      isEditing = false;
+      if (api) api.postMessage({ type: 'save', character: ch });
+      else saveLocal(ch);
+      buildUI();
+      setStatus(api ? 'Saving…' : 'Saved locally ✓');
     });
-
-    skillsCard.appendChild(skillsTable);
-
-//   skillsCard.appendChild(skillGrid);
-
- // Attacks Tab
-  var attacksCard = h('div', { class: 'card attacks' });
-  attacksCard.appendChild(h('h2', {}, ['Attacks']));
-  var list = h('div', { id: 'attacks.list' });
-  var addBtn = h('button', { class: 'btn', style: { marginTop: '8px' } }, ['+ Add attack']);
-    addBtn.addEventListener('click', function () {
-    ch.attacks.push({ name: 'New Attack', range: 'Melee', hitDc: '+0', damage: '1d6+2', notes: '' });
-    derived = computeDerived(ch);
-    renderAttacks();
+    var cancelBtn = h('button', { class: 'btn' }, ['Cancel']);
+    cancelBtn.addEventListener('click', function () {
+      isEditing = false;
+      buildUI();
+      if (api) { api.postMessage({ type: 'load' }); setStatus('Reverting…'); }
     });
-  attacksCard.appendChild(list);
-  attacksCard.appendChild(addBtn);
+    headerActions.appendChild(saveBtn);
+    headerActions.appendChild(cancelBtn);
+  }
 
-  var notesCard = h('div', { class: 'card' }, [
-    h('h2', {}, ['Notes']),
-    (function () {
-      var ta = h('textarea', { value: ch.notes || '' });
-      ta.addEventListener('input', function () { return update({ notes: ta.value }); });
-      return ta;
-    })(),
-  ]);
-
-
-    // Spells Tab (modeled after Attacks)
-  var spellsCard = h('div', { class: 'card spells' });
-  spellsCard.appendChild(h('h2', {}, ['Spells']));
-
-    // Spellcasting meta card (slots, DC, attack mod)
-  var spellMeta = h('div', { class: 'spellcasting card', style: { padding: '10px', border: '1px dashed var(--bd)' } });
-
-  // top row: ability + numbers + derived DC/Atk
-  var topRow = h('div', { class: 'inline' }, [
-    // Spellcasting Ability selector
-    (function () {
-      const sel = h('select', { class: 'sel' }, ABILITIES.map(a => h('option', { value: a, selected: (ch.spellcasting?.ability || 'INT') === a }, [a])));
-      sel.addEventListener('change', () => updateDeep('spellcasting.ability', sel.value));
-      return labeledWrap('Spell Ability', sel);
-    })(),
-
-    labeledNumber('Cantrips Known', 'sp.cantrips', ch.spellcasting?.cantripsKnown || 0, v => updateDeep('spellcasting.cantripsKnown', Math.max(0, v)), 0),
-    labeledNumber('Prepared Spells', 'sp.prepared', ch.spellcasting?.preparedSpells || 0, v => updateDeep('spellcasting.preparedSpells', Math.max(0, v)), 0),
-
-    // Derived DC (with misc)
-    (function () {
-      const misc = h('input', { class: 'inp', type: 'number', value: ch.spellcasting?.miscSaveDC || 0, style: { width: '90px' } });
-      misc.addEventListener('input', () => updateDeep('spellcasting.miscSaveDC', int(misc.value, 0)));
-      return h('div', { class: 'lbl' }, [
-        h('div', { class: 'lblt' }, ['Spell Save DC']),
-        h('div', { class: 'inline' }, [
-          h('span', { class: 'chip' }, ['DC ', h('strong', { id: 'derived.spell.dc' }, [String(derived.spellSaveDC || (8 + abilityMod(ch.abilities.INT) + derived.proficiencyBonus))])]),
-          h('span', { class: 'mut' }, ['misc']),
-          misc,
-        ]),
-      ]);
-    })(),
-
-    // Derived Attack Mod (with misc)
-    (function () {
-      const misc = h('input', { class: 'inp', type: 'number', value: ch.spellcasting?.miscAttackMod || 0, style: { width: '90px' } });
-      misc.addEventListener('input', () => updateDeep('spellcasting.miscAttackMod', int(misc.value, 0)));
-      return h('div', { class: 'lbl' }, [
-        h('div', { class: 'lblt' }, ['Spell Attack Modifier']),
-        h('div', { class: 'inline' }, [
-          h('span', { class: 'chip' }, [h('strong', { id: 'derived.spell.attack' }, [fmtSigned(derived.spellAtkMod || 0)])]),
-          h('span', { class: 'mut' }, ['misc']),
-          misc,
-        ]),
-      ]);
-    })(),
-  ]);
-  spellMeta.appendChild(topRow);
-
-  // slots grid header
-  spellMeta.appendChild(h('div', { class: 'grid hdr' }, [
-    h('div', {}, ['Lvl']),
-    h('div', {}, ['Total']),
-    h('div', {}, ['Used']),
-    h('div', {}, ['Slots']),
+  sheet.appendChild(h('div', { class: 'sheetHeader' }, [
+    h('div', { class: 'charTitle' }, [
+      h('div', { class: 'charName', id: 'hdr.name' }, [ch.name || 'Unnamed Character']),
+      h('div', { class: 'charMeta', id: 'hdr.meta' }, [charMetaText()]),
+    ]),
+    headerActions,
   ]));
 
-  // slots rows (1..9)
-  for (let lvl = 1; lvl <= 9; lvl++) {
-    const key = `spellcasting.slots.${lvl}`;
-    const row = h('div', { class: 'grid' });
+  // ===== Identity (edit mode only — shown as header text otherwise) =====
+  sheet.appendChild(h('div', { class: 'card editOnly' }, [
+    h('h3', { class: 'cardTitle' }, ['Identity']),
+    h('div', { class: 'grid2' }, [
+      labeledInput('Name', 'id.name', ch.name, function (v) { return update({ name: v }); }),
+      labeledNumber('Level', 'id.level', ch.level, function (v) { return update({ level: clamp(v, 1, 20) }); }, 1, 20),
+    ]),
+    h('div', { class: 'grid2', style: { marginTop: '8px' } }, [
+      labeledInput('Class', 'id.class', ch.class, function (v) { return update({ class: v }); }),
+      labeledInput('Species / Race', 'id.race', ch.race || '', function (v) { return update({ race: v }); }),
+    ]),
+    h('div', { class: 'grid2', style: { marginTop: '8px' } }, [
+      labeledInput('Background', 'id.background', ch.background || '', function (v) { return update({ background: v }); }),
+      labeledInput('Alignment', 'id.alignment', ch.alignment || '', function (v) { return update({ alignment: v }); }),
+    ]),
+  ]));
 
-    const total = int(ch.spellcasting?.slots?.[lvl]?.total, 0);
-    const used  = int(ch.spellcasting?.slots?.[lvl]?.used,  0);
-    const totalInp = h('input', { class: 'inp', type: 'number', value: total, min: 0 });
-    const usedInp  = h('input', { class: 'inp', type: 'number', value: used,  min: 0, max: Math.max(0,total) });
+  // ===== Ability score strip =====
+  var abilityRow = h('div', { class: 'abilityRow' });
+  ABILITIES.forEach(function (a) {
+    var modEl = h('div', { class: 'abMod', id: 'abil.mod.' + a, title: 'Roll ' + a + ' check' }, [fmtSigned(derived.mods[a])]);
+    modEl.addEventListener('click', function () { rollTo('1d20' + signed(derived.mods[a]), a + ' check'); });
+    var scoreView = h('span', { class: 'abScore viewOnly', id: 'abil.score.' + a }, [String(ch.abilities[a])]);
+    var scoreInp = h('input', { class: 'inp abScoreInp editOnly', type: 'number', value: ch.abilities[a], min: 1, max: 30 });
+    scoreInp.addEventListener('input', function () { updateDeep('abilities.' + a, clamp(int(scoreInp.value, ch.abilities[a]), 1, 30)); });
+    var box = h('div', { class: 'abilityBox', 'data-ability': a }, [
+      h('div', { class: 'abName lblt' }, [a]),
+      modEl,
+      scoreView,
+      scoreInp,
+    ]);
+    attachAbilityTooltip(box, a);
+    abilityRow.appendChild(box);
+  });
+  sheet.appendChild(abilityRow);
 
-    totalInp.addEventListener('input', () => {
-      const v = Math.max(0, int(totalInp.value, 0));
-      updateDeep(`${key}.total`, v);
-      if (used > v) updateDeep(`${key}.used`, v);
-      renderSpellDots(); // refresh dots
-    });
-    usedInp.addEventListener('input', () => {
-      const v = clamp(int(usedInp.value, 0), 0, Math.max(0, int(totalInp.value, 0)));
-      updateDeep(`${key}.used`, v);
-      renderSpellDots();
-    });
-
-    const dots = h('div', { class: 'slotDots', 'data-lvl': String(lvl) });
-    row.appendChild(h('div', {}, [String(lvl)]));
-    row.appendChild(totalInp);
-    row.appendChild(usedInp);
-    row.appendChild(dots);
-    spellMeta.appendChild(row);
+  // ===== Vitals band =====
+  function vitalTile(label, node, extraClass) {
+    return h('div', { class: 'vital' + (extraClass ? ' ' + extraClass : '') }, [
+      h('div', { class: 'vitalLabel' }, [label]),
+      node,
+    ]);
   }
 
-  // dot render helper
-  function renderSpellDots() {
-    for (let lvl = 1; lvl <= 9; lvl++) {
-      const dots = spellMeta.querySelector(`.slotDots[data-lvl="${lvl}"]`);
-      if (!dots) continue;
-      dots.innerHTML = '';
-      const total = int(ch.spellcasting?.slots?.[lvl]?.total, 0);
-      const used  = int(ch.spellcasting?.slots?.[lvl]?.used,  0);
-      for (let i = 0; i < total; i++) {
-        const on = i < used;
-        const d = h('div', { class: 'dot ' + (on ? 'on' : 'off'), title: on ? 'Click to unuse' : 'Click to use' }, [on ? '●' : '○']);
-        d.addEventListener('click', () => {
-          const cur = int(ch.spellcasting?.slots?.[lvl]?.used, 0);
-          if (on) updateDeep(`spellcasting.slots.${lvl}.used`, Math.max(0, cur - 1));
-          else    updateDeep(`spellcasting.slots.${lvl}.used`, Math.min(total, cur + 1));
-          renderSpellDots();
+  var pbTile = vitalTile('Proficiency', h('div', { class: 'vitalValue' }, [
+    h('span', { id: 'derived.pb' }, [fmtSigned(derived.proficiencyBonus)]),
+  ]));
+
+  var speedInp = h('input', { class: 'inp vitalNum', value: ch.speed || '' });
+  speedInp.style.fontSize = '16px';
+  speedInp.style.width = '84px';
+  speedInp.addEventListener('input', function () { update({ speed: speedInp.value }); });
+  var speedTile = vitalTile('Speed', speedInp);
+
+  var initVal = h('div', { class: 'vitalValue roll', title: 'Roll initiative' }, [
+    h('span', { id: 'derived.initiative' }, [fmtSigned(derived.initiative)]),
+  ]);
+  initVal.addEventListener('click', function () { rollTo('1d20' + signed(derived.initiative), 'Initiative'); });
+  var initTile = vitalTile('Initiative', initVal);
+
+  var acInp = h('input', { class: 'inp vitalNum', type: 'number', value: ch.armorClass, min: 0, max: 40 });
+  acInp.addEventListener('input', function () { update({ armorClass: clamp(int(acInp.value, ch.armorClass), 0, 40) }); });
+  var acTile = vitalTile('Armor Class', acInp, 'vitalAc');
+
+  var hpCur = h('input', { class: 'inp vitalNum', type: 'number', value: ch.currentHP, min: 0 });
+  var hpMax = h('input', { class: 'inp vitalNum', type: 'number', value: ch.maxHP, min: 1 });
+  var hpTmp = h('input', { class: 'inp', type: 'number', value: ch.tempHP || 0, min: 0 });
+  hpCur.addEventListener('input', function () { update({ currentHP: clamp(int(hpCur.value, ch.currentHP), 0, ch.maxHP) }); });
+  hpMax.addEventListener('input', function () { update({ maxHP: Math.max(1, int(hpMax.value, ch.maxHP)) }); });
+  hpTmp.addEventListener('input', function () { update({ tempHP: Math.max(0, int(hpTmp.value, 0)) }); });
+  // Heal/damage controls: usable while viewing (play mode); direct HP inputs
+  // cover the edit-mode case. Damage is absorbed by temp HP first (5e rules).
+  var amtInp = h('input', { class: 'inp playInput', type: 'number', value: healAmount, min: 1, title: 'Amount' });
+  amtInp.addEventListener('input', function () { healAmount = Math.max(1, int(amtInp.value, 1)); });
+  function applyHp(delta) {
+    var amt = Math.max(1, int(amtInp.value, healAmount));
+    var cur = Number(ch.currentHP || 0), tmp = Number(ch.tempHP || 0);
+    var text;
+    if (delta < 0) {
+      var absorbed = Math.min(tmp, amt);
+      tmp -= absorbed;
+      cur = Math.max(0, cur - (amt - absorbed));
+      text = 'Took ' + amt + ' damage — HP ' + cur + '/' + ch.maxHP + (tmp ? ' (+' + tmp + ' temp)' : '');
+    } else {
+      cur = Math.min(Number(ch.maxHP || 1), cur + amt);
+      text = 'Healed ' + amt + ' — HP ' + cur + '/' + ch.maxHP;
+    }
+    ch.currentHP = cur; ch.tempHP = tmp;
+    hpCur.value = cur; hpTmp.value = tmp;
+    derived = computeDerived(ch);
+    renderDynamic();
+    setStatus(text);
+    logSession(text);
+    schedulePlaySave();
+  }
+  var hpDmgBtn = h('button', { class: 'btn small playInput', title: 'Take damage (temp HP absorbs first)' }, ['− Dmg']);
+  hpDmgBtn.addEventListener('click', function () { applyHp(-1); });
+  var hpHealBtn = h('button', { class: 'btn small playInput', title: 'Heal' }, ['+ Heal']);
+  hpHealBtn.addEventListener('click', function () { applyHp(1); });
+
+  var hpTile = vitalTile('Hit Points', h('div', {}, [
+    h('div', { class: 'hpRow' }, [hpCur, h('span', { class: 'hpSlash' }, ['/']), hpMax]),
+    h('div', { class: 'hpTemp' }, [h('span', {}, ['TEMP']), hpTmp]),
+    h('div', { class: 'hpPlayRow viewOnly' }, [hpDmgBtn, amtInp, hpHealBtn]),
+  ]), 'vitalHp');
+
+  sheet.appendChild(h('div', { class: 'vitalsRow' }, [pbTile, speedTile, initTile, acTile, hpTile]));
+
+  // ===== Main two-column body =====
+  var leftCol = h('div', { class: 'colStack' });
+  var rightCol = h('div', { class: 'colStack' });
+  sheet.appendChild(h('div', { class: 'mainGrid' }, [leftCol, rightCol]));
+
+  // --- Saving throws ---
+  var savesGrid = h('div', { class: 'savesGrid' });
+  ABILITIES.forEach(function (a) {
+    var on = !!ch.savingThrowsProficiencies[a];
+    var pip = h('span', { class: 'pip' + (on ? ' on' : ''), id: 'save.pip.' + a });
+    var item = h('div', {
+      class: 'saveItem',
+      title: isEditing ? 'Toggle proficiency' : 'Roll ' + a + ' save',
+    }, [
+      pip,
+      h('span', { class: 'saveName' }, [a]),
+      h('span', { class: 'saveVal', id: 'save.total.' + a }, [fmtSigned(derived.savingThrows[a])]),
+    ]);
+    item.addEventListener('click', function () {
+      if (isEditing) updateDeep('savingThrowsProficiencies.' + a, !ch.savingThrowsProficiencies[a]);
+      else rollTo('1d20' + signed(derived.savingThrows[a]), a + ' save');
+    });
+    savesGrid.appendChild(item);
+  });
+  leftCol.appendChild(h('div', { class: 'card' }, [
+    h('h3', { class: 'cardTitle' }, ['Saving Throws']),
+    savesGrid,
+  ]));
+
+  // --- Senses ---
+  function senseRow(label, id, value) {
+    return h('div', { class: 'senseRow' }, [
+      h('span', {}, [label]),
+      h('span', { class: 'senseVal', id: id }, [String(value)]),
+    ]);
+  }
+  leftCol.appendChild(h('div', { class: 'card' }, [
+    h('h3', { class: 'cardTitle' }, ['Senses']),
+    senseRow('Passive Perception', 'derived.pp', derived.passivePerception),
+    senseRow('Passive Insight', 'derived.pins', 10 + (derived.skills['Insight'] || 0)),
+    senseRow('Passive Investigation', 'derived.pinv', 10 + (derived.skills['Investigation'] || 0)),
+  ]));
+
+  // --- Skills ---
+  var skillsWrap = h('div', {});
+  SKILLS.forEach(function (sk) {
+    var lvl = ch.skillsProficiencies[sk] || 'none';
+    var pip = h('span', { class: 'pip viewOnly' + (lvl === 'expert' ? ' expert' : lvl === 'prof' ? ' on' : ''), id: 'skill.pip.' + sk });
+    var sel = selectProf(lvl, function (p) { return updateDeep('skillsProficiencies.' + sk, p); });
+    sel.classList.add('editOnly');
+    var profCell = h('span', { style: { display: 'inline-flex', alignItems: 'center' } }, [pip, sel]);
+    var name = h('span', { class: 'skillName' }, [
+      sk + ' ',
+      h('span', { class: 'skillAb' }, [SKILL_TO_ABILITY[sk]]),
+    ]);
+    var val = h('span', { class: 'skillVal', id: 'skill.total.' + sk, title: 'Roll ' + sk }, [fmtSigned(derived.skills[sk])]);
+    val.addEventListener('click', function () { rollTo('1d20' + signed(derived.skills[sk]), sk); });
+    skillsWrap.appendChild(h('div', { class: 'skillRow' }, [profCell, name, val]));
+  });
+  leftCol.appendChild(h('div', { class: 'card' }, [
+    h('h3', { class: 'cardTitle' }, ['Skills']),
+    skillsWrap,
+  ]));
+
+  // --- Tab bar + sections ---
+  var tabBar = h('div', { class: 'tabBar' });
+  var sections = {};
+  TAB_DEFS.forEach(function (t) {
+    var b = h('button', { class: 'tabBtn', 'data-tab': t.id }, [t.label]);
+    b.addEventListener('click', function () {
+      setActiveTab(t.id);
+      // Spells/items are shared with the Actions tab (and the journal gets
+      // session log lines) — re-render so tabs stay in sync.
+      renderActions(); renderSpells(); renderInventory(); renderFeatures(); renderJournal();
+      showActiveTab();
+    });
+    tabBar.appendChild(b);
+  });
+  rightCol.appendChild(tabBar);
+
+  function showActiveTab() {
+    if (!sections[activeTab]) activeTab = TAB_DEFS[0].id;
+    Array.from(tabBar.querySelectorAll('.tabBtn')).forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-tab') === activeTab);
+    });
+    Object.keys(sections).forEach(function (id) {
+      sections[id].style.display = id === activeTab ? '' : 'none';
+    });
+  }
+
+  // --- Actions section ---
+  var actionsCard = h('div', { class: 'card tabSection' }, [
+    h('h3', { class: 'cardTitle' }, ['Actions & Attacks']),
+    h('div', { class: 'tableScroll' }, [h('div', { class: 'tableInner' }, [
+      h('div', { class: 'rowsHead' }, [
+        h('div', {}, ['Attack']), h('div', {}, ['Range']), h('div', {}, ['Hit / DC']),
+        h('div', {}, ['Damage']), h('div', {}, ['Notes']), h('div', {}, ['']),
+      ]),
+      h('div', { id: 'attacks.list' }),
+    ])]),
+  ]);
+  var addAtk = h('button', { class: 'btn addBtn editOnly' }, ['+ Add attack']);
+  addAtk.addEventListener('click', function () {
+    ch.attacks.push({ name: 'New Attack', range: 'Melee', hitDc: '+0', damage: '1d6+2', notes: '' });
+    renderActions();
+  });
+  actionsCard.appendChild(addAtk);
+
+  // Spells: same layout as the Spells tab (no Notes column; notes drop down)
+  actionsCard.appendChild(h('div', { class: 'actionsGroup', id: 'actions.spells.group' }, [
+    h('div', { class: 'lblt' }, ['Spells']),
+    h('div', { class: 'tableScroll' }, [h('div', { class: 'tableInner' }, [
+      h('div', { class: 'asrowHead' }, [
+        h('div', {}, ['']), h('div', {}, ['Spell']), h('div', {}, ['Range']),
+        h('div', {}, ['Hit / DC']), h('div', {}, ['Damage']), h('div', {}, ['']),
+      ]),
+      h('div', { id: 'actions.spells.list' }),
+    ])]),
+  ]));
+  // Features: name-only rows that expand into their details
+  actionsCard.appendChild(h('div', { class: 'actionsGroup', id: 'actions.features.group' }, [
+    h('div', { class: 'lblt' }, ['Features & Abilities']),
+    h('div', { id: 'actions.features.list' }),
+  ]));
+  // Equipment: keeps the full combat row (stats live on the item itself)
+  actionsCard.appendChild(h('div', { class: 'actionsGroup', id: 'actions.items.group' }, [
+    h('div', { class: 'lblt' }, ['Equipment']),
+    h('div', { class: 'tableScroll' }, [h('div', { class: 'tableInner' }, [
+      h('div', { class: 'rowsHead' }, [
+        h('div', {}, ['Item']), h('div', {}, ['Range']), h('div', {}, ['Hit / DC']),
+        h('div', {}, ['Damage']), h('div', {}, ['Notes']), h('div', {}, ['']),
+      ]),
+      h('div', { id: 'actions.items.list' }),
+    ])]),
+  ]));
+  actionsCard.appendChild(h('div', { class: 'emptyHint editOnly' }, ['Tip: flag spells, features and inventory items with ⚔ to include them here.']));
+  sections.actions = actionsCard;
+  rightCol.appendChild(actionsCard);
+
+  // --- Spells section ---
+  var spellsCard = h('div', { class: 'card tabSection' }, [h('h3', { class: 'cardTitle' }, ['Spellcasting'])]);
+
+  var abilView = h('div', { class: 'vitalValue viewOnly' }, [
+    h('span', { id: 'spell.ability.view' }, [(ch.spellcasting?.ability && ch.spellcasting.ability !== 'NA') ? ch.spellcasting.ability : '—']),
+  ]);
+  var abilSel = h('select', { class: 'sel editOnly' }, ['NA'].concat(ABILITIES).map(function (a) {
+    return h('option', { value: a, selected: (ch.spellcasting?.ability || 'NA') === a }, [a === 'NA' ? '—' : a]);
+  }));
+  abilSel.addEventListener('change', function () { updateDeep('spellcasting.ability', abilSel.value); });
+  var abilTile = vitalTile('Ability', h('div', {}, [abilView, abilSel]));
+
+  var dcMisc = h('input', { class: 'inp', type: 'number', value: ch.spellcasting?.miscSaveDC || 0 });
+  dcMisc.addEventListener('input', function () { updateDeep('spellcasting.miscSaveDC', int(dcMisc.value, 0)); });
+  var dcTile = vitalTile('Save DC', h('div', {}, [
+    h('div', { class: 'vitalValue' }, [h('span', { id: 'derived.spell.dc' }, [String(derived.spellSaveDC)])]),
+    h('div', { class: 'miscRow editOnly' }, [h('span', {}, ['misc']), dcMisc]),
+  ]));
+
+  var atkMisc = h('input', { class: 'inp', type: 'number', value: ch.spellcasting?.miscAttackMod || 0 });
+  atkMisc.addEventListener('input', function () { updateDeep('spellcasting.miscAttackMod', int(atkMisc.value, 0)); });
+  var atkVal = h('div', { class: 'vitalValue roll', title: 'Roll spell attack' }, [
+    h('span', { id: 'derived.spell.attack' }, [fmtSigned(derived.spellAtkMod)]),
+  ]);
+  atkVal.addEventListener('click', function () { rollTo('1d20' + signed(derived.spellAtkMod), 'Spell attack'); });
+  var atkTile = vitalTile('Spell Attack', h('div', {}, [
+    atkVal,
+    h('div', { class: 'miscRow editOnly' }, [h('span', {}, ['misc']), atkMisc]),
+  ]));
+
+  var cantripsInp = h('input', { class: 'inp vitalNum', type: 'number', value: ch.spellcasting?.cantripsKnown || 0, min: 0 });
+  cantripsInp.style.fontSize = '16px';
+  cantripsInp.addEventListener('input', function () { updateDeep('spellcasting.cantripsKnown', Math.max(0, int(cantripsInp.value, 0))); });
+  var preparedInp = h('input', { class: 'inp vitalNum', type: 'number', value: ch.spellcasting?.preparedSpells || 0, min: 0 });
+  preparedInp.style.fontSize = '16px';
+  preparedInp.addEventListener('input', function () { updateDeep('spellcasting.preparedSpells', Math.max(0, int(preparedInp.value, 0))); });
+
+  spellsCard.appendChild(h('div', { class: 'spellStatRow' }, [
+    abilTile, dcTile, atkTile,
+    vitalTile('Cantrips', cantripsInp),
+    vitalTile('Prepared', preparedInp),
+  ]));
+
+  // Spell slots — dots to expend/restore; totals editable in edit mode
+  var slotsWrap = h('div', {});
+
+  function renderSlotDots(lvl) {
+    var dots = slotsWrap.querySelector('.slotDots[data-lvl="' + lvl + '"]');
+    if (!dots) return;
+    dots.innerHTML = '';
+    var total = int(ch.spellcasting?.slots?.[lvl]?.total, 0);
+    var used = int(ch.spellcasting?.slots?.[lvl]?.used, 0);
+    for (var i = 0; i < total; i++) {
+      (function (idx) {
+        var on = idx < used;
+        var d = h('div', { class: 'dot' + (on ? ' on' : ''), title: on ? 'Click to restore' : 'Click to expend' });
+        d.addEventListener('click', function () {
+          var cur = int(ch.spellcasting?.slots?.[lvl]?.used, 0);
+          updateDeep('spellcasting.slots.' + lvl + '.used', on ? Math.max(0, cur - 1) : Math.min(total, cur + 1));
+          renderSlotDots(lvl);
         });
         dots.appendChild(d);
-      }
+      })(i);
     }
   }
-  renderSpellDots();
 
-  spellsCard.appendChild(spellMeta);
+  function makeSlotRow(lvl) {
+    var total = int(ch.spellcasting?.slots?.[lvl]?.total, 0);
+    var row = h('div', { class: 'slotRow' });
+    if (!isEditing && total === 0) row.style.display = 'none';
+    row.appendChild(h('span', { class: 'slotLvl' }, ['Level ' + lvl]));
+    var totalInp = h('input', { class: 'inp slotTotalInp editOnly', type: 'number', value: total, min: 0, title: 'Total slots' });
+    totalInp.addEventListener('input', function () {
+      var v = Math.max(0, int(totalInp.value, 0));
+      updateDeep('spellcasting.slots.' + lvl + '.total', v);
+      if (int(ch.spellcasting?.slots?.[lvl]?.used, 0) > v) updateDeep('spellcasting.slots.' + lvl + '.used', v);
+      renderSlotDots(lvl);
+    });
+    row.appendChild(totalInp);
+    row.appendChild(h('div', { class: 'slotDots', 'data-lvl': String(lvl) }));
+    slotsWrap.appendChild(row);
+    renderSlotDots(lvl);
+  }
 
-  var spellsList = h('div', { id: 'spells.list' });
-  var addSpellBtn = h('button', { class: 'btn', style: { marginTop: '8px' } }, ['+ Add spell']);
-  addSpellBtn.addEventListener('click', function () {
+  var anySlots = false;
+  for (var lv = 1; lv <= 9; lv++) {
+    if (int(ch.spellcasting?.slots?.[lv]?.total, 0) > 0) { anySlots = true; break; }
+  }
+  for (var lv2 = 1; lv2 <= 9; lv2++) makeSlotRow(lv2);
+
+  spellsCard.appendChild(h('div', { class: 'spellsBlock' }, [
+    h('div', { class: 'lblt' }, ['Spell Slots']),
+    (anySlots || isEditing) ? slotsWrap : h('div', { class: 'emptyHint' }, ['No spell slots']),
+  ]));
+
+  spellsCard.appendChild(h('div', { class: 'spellsBlock' }, [
+    h('div', { class: 'lblt' }, ['Spells']),
+    h('div', { class: 'tableScroll' }, [h('div', { class: 'tableInner' }, [
+      h('div', { class: 'srowHead' }, [
+        h('div', {}, ['']), h('div', {}, ['Spell']), h('div', {}, ['Range']),
+        h('div', {}, ['Hit / DC']), h('div', {}, ['Damage']), h('div', {}, ['']), h('div', {}, ['']),
+      ]),
+      h('div', { id: 'spells.list' }),
+    ])]),
+  ]));
+  var addSpell = h('button', { class: 'btn addBtn editOnly' }, ['+ Add spell']);
+  addSpell.addEventListener('click', function () {
     ch.spells.push({ name: 'New Spell', range: '30 ft', hitDc: '+0', damage: '1d6', notes: '' });
-    derived = computeDerived(ch);
     renderSpells();
   });
-  spellsCard.appendChild(spellsList);
-  spellsCard.appendChild(addSpellBtn);
+  spellsCard.appendChild(addSpell);
+  sections.spells = spellsCard;
+  rightCol.appendChild(spellsCard);
 
-  // Inventory Tab
-  var inventoryCard = h('div', { class: 'card inventory' });
-  inventoryCard.appendChild(h('h2', {}, ['Inventory']));
-  var inventoryList = h('div', { id: 'inventory.list' });
-  var addItemBtn = h('button', { class: 'btn', style: { marginTop: '8px' } }, ['+ Add item']);
-  addItemBtn.addEventListener('click', function () {
+  // --- Inventory section ---
+  var invCard = h('div', { class: 'card tabSection' }, [
+    h('h3', { class: 'cardTitle' }, ['Inventory']),
+    h('div', { class: 'irowHead' }, [
+      h('div', {}, ['']), h('div', {}, ['Item']), h('div', {}, ['Value']),
+      h('div', {}, ['']), h('div', {}, ['']),
+    ]),
+    h('div', { id: 'inventory.list' }),
+  ]);
+  var addItem = h('button', { class: 'btn addBtn editOnly' }, ['+ Add item']);
+  addItem.addEventListener('click', function () {
     ch.inventory.push({ name: 'New Item', value: '', desc: '' });
     renderInventory();
   });
-  inventoryCard.appendChild(inventoryList);
-  inventoryCard.appendChild(addItemBtn);
-  // Journal Tab
-  var journalCard = h('div', { class: 'card journal' });
-  journalCard.appendChild(h('h2', {}, ['Journal']));
-  var journalList = h('div', { id: 'journal.list' });
-  var addEntryBtn = h('button', { class: 'btn', style: { marginTop: '8px' } }, ['+ Add Entry']);
-  addEntryBtn.addEventListener('click', function () {
+  invCard.appendChild(addItem);
+  sections.inventory = invCard;
+  rightCol.appendChild(invCard);
+
+  // --- Features section ---
+  var featCard = h('div', { class: 'card tabSection' }, [
+    h('h3', { class: 'cardTitle' }, ['Features & Traits']),
+    h('div', { id: 'features.list' }),
+  ]);
+  var addFeat = h('button', { class: 'btn addBtn editOnly' }, ['+ Add feature']);
+  addFeat.addEventListener('click', function () {
+    ch.features.push({ name: 'New Feature', source: '', notes: '' });
+    renderFeatures();
+  });
+  featCard.appendChild(addFeat);
+  sections.features = featCard;
+  rightCol.appendChild(featCard);
+
+  // --- Notes section ---
+  var notesTa = h('textarea', { value: ch.notes || '' });
+  notesTa.style.minHeight = '180px';
+  notesTa.addEventListener('input', function () { return update({ notes: notesTa.value }); });
+  var notesCard = h('div', { class: 'card tabSection' }, [
+    h('h3', { class: 'cardTitle' }, ['Notes']),
+    notesTa,
+  ]);
+  sections.notes = notesCard;
+  rightCol.appendChild(notesCard);
+
+  // --- Journal section ---
+  var journalCard = h('div', { class: 'card tabSection' }, [
+    h('h3', { class: 'cardTitle' }, ['Journal']),
+    h('div', { id: 'journal.list' }),
+  ]);
+  var addEntry = h('button', { class: 'btn addBtn' }, ['+ New entry']);
+  addEntry.addEventListener('click', function () {
     var today = new Date().toISOString().slice(0, 10);
-    ch.journal = ch.journal || [];
-    ch.journal.unshift({ date: today, text: '' });
-    renderJournal();
-  });
-  journalCard.appendChild(journalList);
-  journalCard.appendChild(addEntryBtn);
-
-  // Tag cards so we can toggle
-  skillsCard.setAttribute('data-panel', 'skills');
-  attacksCard.setAttribute('data-panel', 'attacks');
-  notesCard.setAttribute('data-panel', 'notes');
-  spellsCard.setAttribute('data-panel', 'spells');
-  inventoryCard.setAttribute('data-panel', 'inventory');
-  journalCard.setAttribute('data-panel', 'journal');
-
-  // Unified tile map — all 9 tiles
-  var tileMap = {
-    identity:  identity,
-    combat:    combat,
-    abilities: abilities,
-    skills:    skillsCard,
-    attacks:   attacksCard,
-    spells:    spellsCard,
-    inventory: inventoryCard,
-    notes:     notesCard,
-    journal:   journalCard,
-  };
-
-  // Add drag grip + resize handle to every tile
-  Object.entries(tileMap).forEach(function (entry) {
-    var key = entry[0], el = entry[1];
-    // Drag grip in header
-    var heading = el.querySelector('h2');
-    if (heading) {
-      var grip = h('span', { class: 'drag-grip', title: 'Drag to reorder' }, ['\u2801\u2801']);
-      heading.insertBefore(grip, heading.firstChild);
-    }
-    // Resize handle
-    var handle = h('div', { class: 'tile-resize-handle', title: 'Drag to resize' }, ['\u25E2']);
-    el.appendChild(handle);
-
-    // --- Drag-and-drop ---
-    var dragClasses = ['drag-over-left','drag-over-right','drag-over-top','drag-over-bottom'];
-    function clearDragClasses() { dragClasses.forEach(function(c){ el.classList.remove(c); }); }
-
-    // Detect which edge of the tile the cursor is closest to
-    function nearestEdge(ev) {
-      var rect = el.getBoundingClientRect();
-      var x = ev.clientX - rect.left;
-      var y = ev.clientY - rect.top;
-      var dLeft = x, dRight = rect.width - x;
-      var dTop = y, dBottom = rect.height - y;
-      var min = Math.min(dLeft, dRight, dTop, dBottom);
-      if (min === dTop) return 'top';
-      if (min === dBottom) return 'bottom';
-      if (min === dLeft) return 'left';
-      return 'right';
-    }
-
-    el.setAttribute('draggable', 'true');
-    el.addEventListener('dragstart', function (ev) {
-      ev.dataTransfer.setData('text/plain', key);
-      ev.dataTransfer.effectAllowed = 'move';
-    });
-    el.addEventListener('dragover', function (ev) {
-      ev.preventDefault();
-      ev.dataTransfer.dropEffect = 'move';
-      clearDragClasses();
-      el.classList.add('drag-over-' + nearestEdge(ev));
-    });
-    el.addEventListener('dragleave', function () { clearDragClasses(); });
-    el.addEventListener('drop', function (ev) {
-      ev.preventDefault();
-      var edge = nearestEdge(ev);
-      clearDragClasses();
-      var from = ev.dataTransfer.getData('text/plain');
-      if (!from || !tileMap[from]) return;
-      var to = key;
-      if (from === to) return;
-      var order = layout.order.slice();
-      var fi = order.indexOf(from);
-      if (fi === -1) return;
-      order.splice(fi, 1);
-      var ti = order.indexOf(to);
-      if (ti === -1) return;
-      // Top/left = insert before target, bottom/right = insert after
-      var insertAt = (edge === 'top' || edge === 'left') ? ti : ti + 1;
-      order.splice(insertAt, 0, from);
-      layout.order = order;
-      saveLayout();
-      applyLayout();
-    });
-
-    // --- Resize via handle ---
-    // Temporarily disable draggable during resize so it doesn't intercept
-    handle.addEventListener('mousedown', function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      el.setAttribute('draggable', 'false');
-      var startX = e.clientX;
-      var startSpan = (layout.tiles[key] && layout.tiles[key].colSpan) || 2;
-      var colWidth = tileGrid.clientWidth / layout.columns;
-      function onMove(ev) {
-        var dx = ev.clientX - startX;
-        var spanDelta = Math.round(dx / colWidth);
-        var newSpan = Math.max(TILE_MIN_SPAN[key] || 1, Math.min(layout.columns, startSpan + spanDelta));
-        el.style.gridColumn = 'span ' + newSpan;
-      }
-      function onUp(ev) {
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        el.setAttribute('draggable', 'true');
-        var dx = ev.clientX - startX;
-        var spanDelta = Math.round(dx / colWidth);
-        var newSpan = Math.max(TILE_MIN_SPAN[key] || 1, Math.min(layout.columns, startSpan + spanDelta));
-        layout.tiles[key].colSpan = newSpan;
-        saveLayout();
-        applyLayout();
-      }
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-    });
-  });
-
-  function applyLayout() {
-    // Ensure all tiles exist in layout
-    var allTiles = ['identity','combat','abilities','skills','attacks','spells','inventory','journal','notes'];
-    allTiles.forEach(function (id) {
-      if (!layout.tiles[id]) layout.tiles[id] = { visible: true, colSpan: 2 };
-      if (layout.order.indexOf(id) === -1) layout.order.push(id);
-    });
-    layout.order = Array.isArray(layout.order) ? layout.order : allTiles;
-
-    // Rebuild grid in order
-    tileGrid.innerHTML = '';
-    layout.order.forEach(function (id) {
-      var el = tileMap[id];
-      if (!el) return;
-      var tileConf = layout.tiles[id];
-      el.style.display = tileConf.visible ? '' : 'none';
-      el.style.gridColumn = 'span ' + (tileConf.colSpan || 2);
-      tileGrid.appendChild(el);
-    });
-
-    // Responsive abilities grid: 6/3/2/1 columns based on colSpan
-    var abilGrid = abilities.querySelector('.grid6');
-    if (abilGrid) {
-      abilGrid.classList.remove('cols-3', 'cols-2', 'cols-1');
-      var abilSpan = (layout.tiles.abilities && layout.tiles.abilities.colSpan) || 4;
-      if (abilSpan <= 1) abilGrid.classList.add('cols-1');
-      else if (abilSpan <= 2) abilGrid.classList.add('cols-2');
-      else if (abilSpan <= 3) abilGrid.classList.add('cols-3');
-      // colSpan 4 = default 6 columns (no extra class needed)
-    }
-
-    // Update tab button active states
-    Array.from(rightActions.querySelectorAll('.tab')).forEach(function (btn) {
-      var id = btn.getAttribute('data-target');
-      var on = !!(layout.tiles[id] && layout.tiles[id].visible);
-      btn.classList.toggle('active', on);
-    });
-  }
-
-
-
-
-
-
-
-  // Build top bar
-  var leftActions = h('div', { class: 'leftActions' });
-
-  function renderTopLeftButtons() {
-    leftActions.innerHTML = '';
-    if (!isEditing) {
-      // Dice button + dropdown
-      var diceWrap = h('div', { class: 'diceWrap' });
-      var diceBtn = h('button', { class: 'btn', id: 'btn.dice' }, ['Dice']);
-      var dropdown = h('div', { class: 'dice-dropdown', style: { display: 'none' } });
-      var counts = { d4:0, d6:0, d8:0, d10:0, d12:0, d20:0 };
-      var DIE_TYPES = ['d4','d6','d8','d10','d12','d20'];
-
-      function renderDropdown() {
-        dropdown.innerHTML = '';
-        DIE_TYPES.forEach(function(type) {
-          var countSpan = h('span', { class: 'dice-count' }, [String(counts[type])]);
-          var row = h('div', { class: 'dice-row' }, [
-            h('span', {}, [type]),
-            countSpan,
-          ]);
-          row.addEventListener('click', function(e) {
-            e.stopPropagation();
-            counts[type]++;
-            countSpan.textContent = String(counts[type]);
-          });
-          dropdown.appendChild(row);
-        });
-        var actions = h('div', { class: 'dice-actions' });
-        var resetBtn = h('button', { class: 'btn small' }, ['Reset']);
-        var rollBtn = h('button', { class: 'btn small dice-roll' }, ['Roll']);
-        resetBtn.addEventListener('click', function(e) {
-          e.stopPropagation();
-          DIE_TYPES.forEach(function(t){ counts[t] = 0; });
-          renderDropdown();
-        });
-        rollBtn.addEventListener('click', function(e) {
-          e.stopPropagation();
-          var total = DIE_TYPES.reduce(function(a,t){ return a+counts[t]; }, 0);
-          if(total === 0) { setStatus('No dice selected', 2000); return; }
-          var rollCounts = Object.assign({}, counts);
-          dropdown.style.display = 'none';
-          DIE_TYPES.forEach(function(t){ counts[t] = 0; });
-          renderDropdown();
-          if(diceRenderer) {
-            diceRenderer.roll(function(sum, breakdown) {
-              var parts = DIE_TYPES.filter(function(t){ return breakdown[t]; }).map(function(t){
-                return t + ': ' + breakdown[t].join('+');
-              });
-              setStatus('Roll: ' + sum + ' (' + parts.join(', ') + ')', 6000);
-            }, rollCounts);
-          } else {
-            setStatus('Dice renderer unavailable', 3000);
-          }
-        });
-        actions.appendChild(resetBtn);
-        actions.appendChild(rollBtn);
-        dropdown.appendChild(actions);
-      }
-      renderDropdown();
-
-      diceBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
-      });
-      dropdown.addEventListener('click', function(e) { e.stopPropagation(); });
-      document.addEventListener('click', function closeDropdown() {
-        dropdown.style.display = 'none';
-      });
-
-      diceWrap.appendChild(diceBtn);
-      diceWrap.appendChild(dropdown);
-
-      var editBtn = h('button', { class: 'btn', id: 'btn.edit' }, ['Edit']);
-      leftActions.appendChild(diceWrap);
-      leftActions.appendChild(editBtn);
-      leftActions.appendChild(h('div', { id: 'status', class: 'status' }, ['']));
-
-      editBtn.addEventListener('click', function () { isEditing = true; renderTopLeftButtons(); applyEditingState(); });
+    if (api) {
+      api.postMessage({ type: 'journalCreate', entry: { date: today, character: ch.name || '' }, open: true });
+      setStatus('Creating journal entry…');
     } else {
-      var saveBtn = h('button', { class: 'btn', id: 'btn.save' }, ['Save']);
-      var loadBtn = h('button', { class: 'btn', id: 'btn.load' }, ['Load']);
-      leftActions.appendChild(saveBtn);
-      leftActions.appendChild(loadBtn);
-      leftActions.appendChild(h('div', { id: 'status', class: 'status' }, ['']));
-
-      saveBtn.addEventListener('click', function () {
-        if (api) api.postMessage({ type: 'save', character: ch }); else { saveLocal(ch); setStatus('Saved locally ✓'); }
-        isEditing = false; renderTopLeftButtons(); applyEditingState();
-      });
-      loadBtn.addEventListener('click', function () {
-        if (api) { api.postMessage({ type: 'load' }); setStatus('Loading…'); } else { setStatus('Nothing to load (offline)'); }
-      });
+      ch.journal = ch.journal || [];
+      ch.journal.unshift({ title: '', date: today, text: '' });
+      renderJournal();
     }
-  }
+  });
+  journalCard.appendChild(addEntry);
+  sections.journal = journalCard;
+  rightCol.appendChild(journalCard);
 
-  var rightActions = h('div', { class: 'rightActions' }, [
-  h('button', { class: 'btn tab', 'data-target': 'identity'  }, ['Identity']),
-  h('button', { class: 'btn tab', 'data-target': 'combat'    }, ['Combat']),
-  h('button', { class: 'btn tab', 'data-target': 'abilities' }, ['Abilities']),
-  h('button', { class: 'btn tab', 'data-target': 'skills'    }, ['Skills']),
-  h('button', { class: 'btn tab', 'data-target': 'attacks'   }, ['Attacks']),
-  h('button', { class: 'btn tab', 'data-target': 'spells'    }, ['Spells']),
-  h('button', { class: 'btn tab', 'data-target': 'inventory' }, ['Inventory']),
-  h('button', { class: 'btn tab', 'data-target': 'journal'   }, ['Journal']),
-  h('button', { class: 'btn tab', 'data-target': 'notes'     }, ['Notes']),
-]);
-
-  var topbar = h('div', { class: 'topbar' }, [leftActions, rightActions]);
-
-  // Mount
+  // ===== Mount =====
   root.innerHTML = '';
-  var wrap = h('div', { class: 'wrap' });
-  wrap.appendChild(topbar);
-  wrap.appendChild(tileGrid);
-  root.appendChild(wrap);
+  root.appendChild(sheet);
 
   // WebGL dice overlay
   var diceCanvas = h('canvas', { id: 'dice-canvas' });
@@ -2069,181 +2387,107 @@ style.textContent += `
   root.appendChild(diceCanvas);
   diceRenderer = DiceRenderer.init(diceCanvas);
 
-  // Toggle visibility per tile and apply layout
-  rightActions.addEventListener('click', function (e) {
-    var btn = e.target.closest('.tab');
-    if (!btn) return;
-    var id = btn.getAttribute('data-target');
-    if (!layout.tiles[id]) layout.tiles[id] = { visible: true, colSpan: 2 };
-    layout.tiles[id].visible = !layout.tiles[id].visible;
-    saveLayout();
-    applyLayout();
-  });
-  applyLayout();
+  // Let search results fall back to the whole section when a row has no anchor
+  Object.keys(sections).forEach(function (id) { sections[id].setAttribute('data-tabid', id); });
 
-  // Top buttons initial render
-  renderTopLeftButtons();
-
-  // Apply editing state (disable/enable fields)
-  applyEditingState();
-
-  renderAttacks();
+  renderActions();
   renderSpells();
   renderInventory();
+  renderFeatures();
   renderJournal();
   renderDynamic();
-
+  showActiveTab();
+  applyEditingState();
 }
 
-// Enable/disable inputs based on isEditing
+// ---- Journal note view (rendered when the active note is a journal entry) ----
+function buildJournalUI() {
+  var root = document.getElementById('root');
+  if (!root || !journalEntry) return;
+
+  var style = document.getElementById('dnd-style');
+  if (!style) {
+    style = document.createElement('style');
+    style.id = 'dnd-style';
+    document.head.appendChild(style);
+  }
+  style.textContent = SHEET_CSS;
+  applyTheme(localStorage.getItem('dnd.theme') || 'light');
+
+  var e = journalEntry;
+  var sheet = h('div', { class: 'sheet editing' }); // journal entries are always editable
+
+  // Header
+  var saveBtn = h('button', { class: 'btn primary' }, ['Save']);
+  var header = h('div', { class: 'sheetHeader' }, [
+    h('div', { class: 'charTitle' }, [
+      h('div', { class: 'charName', id: 'jhdr.title' }, [e.title || 'Journal Entry']),
+      h('div', { class: 'charMeta' }, [[e.character, 'Character Journal'].filter(Boolean).join(' • ')]),
+    ]),
+    h('div', { class: 'headerActions' }, [saveBtn]),
+  ]);
+  sheet.appendChild(header);
+
+  var card = h('div', { class: 'card' });
+
+  var titleInput = h('input', { class: 'inp rowName', value: e.title || '', placeholder: 'Entry title' });
+  titleInput.addEventListener('input', function () {
+    e.title = titleInput.value;
+    var hd = document.getElementById('jhdr.title');
+    if (hd) hd.textContent = e.title || 'Journal Entry';
+  });
+  var dateInput = h('input', { class: 'inp', type: 'date', value: e.date || '' });
+  dateInput.addEventListener('input', function () { e.date = dateInput.value; });
+  card.appendChild(h('div', { class: 'grid2' }, [
+    labeledWrap('Title', titleInput),
+    labeledWrap('Date', dateInput),
+  ]));
+
+  // Roll log
+  var logWrap = h('div', { class: 'spellsBlock' });
+  logWrap.appendChild(h('div', { class: 'lblt' }, ['Roll Log' + (e.log.length ? ' (' + e.log.length + ')' : '')]));
+  if (e.log.length) {
+    e.log.forEach(function (line, i) {
+      var del = h('button', { class: 'btn small', title: 'Remove line' }, ['✕']);
+      del.addEventListener('click', function () { e.log.splice(i, 1); buildJournalUI(); });
+      logWrap.appendChild(h('div', { class: 'logLine' }, [h('span', {}, [line]), del]));
+    });
+  } else {
+    logWrap.appendChild(h('div', { class: 'emptyHint' }, ['No rolls were logged for this entry.']));
+  }
+  card.appendChild(logWrap);
+
+  // Free-form notes
+  var ta = h('textarea', { class: 'inp', value: e.text || '', placeholder: 'What happened this session…', rows: estimateRows(e.text, 20) });
+  ta.addEventListener('input', function () { e.text = ta.value; });
+  card.appendChild(h('div', { class: 'spellsBlock' }, [labeledWrap('Notes', ta)]));
+
+  sheet.appendChild(card);
+
+  saveBtn.addEventListener('click', function () {
+    if (api) {
+      api.postMessage({ type: 'journalSave', noteId: journalNoteId, entry: e });
+      setStatus('Saving journal entry…');
+    }
+  });
+
+  root.innerHTML = '';
+  root.appendChild(sheet);
+}
+
+// Enable/disable inputs based on isEditing; edit-only chrome is hidden via CSS
 function applyEditingState() {
-  var scope = document.querySelector('.rows');
-  if (!scope) scope = document;
-  // Inputs/selects/textareas
-  Array.from(scope.querySelectorAll('input, select, textarea')).forEach(function (el) {
-    // Do not disable topbar controls
-    if (el.closest('.topbar')) return;
-    // Allow roll buttons inputs to remain enabled for rolls (but they are buttons, not inputs)
-    el.disabled = !isEditing;
-  });
-  // Buttons inside cards: disable add/remove while not editing; keep roll buttons active
-  Array.from(scope.querySelectorAll('button.btn')).forEach(function (btn) {
-    if (btn.closest('.topbar')) return;
-    if (btn.classList.contains('attack-roll-btn')) return;
-    if (btn.classList.contains('tab')) return;
-    // Add/delete buttons in lists
-    var isAddOrDelete = /\+ Add|✕/.test(btn.textContent || '');
-    if (isAddOrDelete) btn.disabled = !isEditing; else btn.disabled = false;
-  });
-}
-function renderSpells() {
-  var list = document.getElementById('spells.list');
-  if (!list) return;
-  list.innerHTML = '';
-
-  ch.spells.forEach(function (sp, i) {
-    var hitDcVal = (sp.hitDc != null ? String(sp.hitDc) : '+0');
-    var dmgVal   = (sp.damage != null ? String(sp.damage) : '1d6');
-    var rangeVal = (sp.range  != null ? String(sp.range)  : '');
-
-    var name  = h('input', { class: 'inp', value: sp.name || '' });
-    var range = h('input', { class: 'inp', value: rangeVal });
-
-    var hitDcInput = h('input', { class: 'inp', value: hitDcVal, title: 'Enter modifier (e.g. +5). Double-click/Enter or 🎲 to roll' });
-    var hitBtn = h('button', { class: 'btn attack-roll-btn', title: 'Roll Hit/DC' }, ['🎲']);
-    var hitWrap = h('div', { class: 'cell-inline' }, [hitDcInput, hitBtn]);
-
-    var dmgInput = h('input', { class: 'inp', value: dmgVal, title: 'Composite damage like 2d6+1d4+3' });
-    var dmgBtn = h('button', { class: 'btn attack-roll-btn', title: 'Roll Damage' }, ['🎲']);
-    var dmgWrap = h('div', { class: 'cell-inline' }, [dmgInput, dmgBtn]);
-
-    var notes = h('input', { class: 'inp', value: sp.notes || '' });
-    var del   = h('button', { class: 'btn small', title: 'Remove' }, ['✕']);
-
-    name.addEventListener('input',  function () { ch.spells[i].name  = name.value; });
-    range.addEventListener('input', function () { ch.spells[i].range = range.value; });
-    hitDcInput.addEventListener('input', function () { ch.spells[i].hitDc = hitDcInput.value; });
-    dmgInput.addEventListener('input', function () { ch.spells[i].damage = dmgInput.value; });
-    notes.addEventListener('input', function () { ch.spells[i].notes  = notes.value; });
-    del.addEventListener('click',   function () { ch.spells.splice(i, 1); renderSpells(); });
-
-    function rollHit() {
-      var mod = parseInt(String(hitDcInput.value).replace(/\s+/g, ''), 10);
-      if (!Number.isFinite(mod)) mod = 0;
-      var expr = `1d20${mod >= 0 ? '+'+mod : mod}`;
-      if (api) api.postMessage({ type: 'roll', expr });
-      else {
-        var r = rollExpr(expr);
-        setStatus(`Spell Hit/DC (${sp.name || 'Spell'}): ${r.total} (${r.detail})`, 4000);
-      }
-    }
-    function rollDamage() {
-      var exprIn = String(dmgInput.value || '0');
-      var r = rollCompositeDamage(exprIn);
-      if (api && r.exprForHost) {
-        api.postMessage({ type: 'roll', expr: r.exprForHost });
-      } else {
-        setStatus(`Spell Damage (${sp.name || 'Spell'}): ${r.total} (${r.detail})`, 4000);
-      }
-    }
-    hitBtn.addEventListener('click', rollHit);
-    dmgBtn.addEventListener('click', rollDamage);
-    hitDcInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') rollHit(); });
-    hitDcInput.addEventListener('dblclick', rollHit);
-    dmgInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') rollDamage(); });
-    dmgInput.addEventListener('dblclick', rollDamage);
-
-    var row = h('div', { class: 'rowGrid' }, [
-      labeledWrap('Spell',  name),
-      labeledWrap('Range',  range),
-      labeledWrap('Hit/DC', hitWrap),
-      labeledWrap('Damage', dmgWrap),
-      labeledWrap('Notes',  notes),
-      del,
-    ]);
-
-    list.appendChild(row);
+  var sheet = document.querySelector('.sheet');
+  if (!sheet) return;
+  sheet.classList.toggle('editing', isEditing);
+  sheet.classList.toggle('viewing', !isEditing);
+  Array.from(sheet.querySelectorAll('input, select, textarea')).forEach(function (el) {
+    // .playInput controls (heal/damage) stay usable while viewing
+    el.disabled = !isEditing && !el.classList.contains('playInput');
   });
 }
 
-function renderInventory() {
-  var list = document.getElementById('inventory.list');
-  if (!list) return;
-  list.innerHTML = '';
-
-  ch.inventory.forEach(function (it, i) {
-    var name  = h('input', { class: 'inp', value: it.name || '' });
-    var value = h('input', { class: 'inp', value: it.value || '', placeholder: 'e.g., 25 gp' });
-    var desc  = h('textarea', { class: 'inp', value: it.desc || '', placeholder: 'Item description...', rows: 2 });
-    var del   = h('button', { class: 'btn small', title: 'Remove' }, ['✕']);
-
-    name.addEventListener('input',  function () { ch.inventory[i].name  = name.value; });
-    value.addEventListener('input', function () { ch.inventory[i].value = value.value; });
-    desc.addEventListener('input',  function () { ch.inventory[i].desc  = desc.value; });
-    del.addEventListener('click',   function () { ch.inventory.splice(i, 1); renderInventory(); });
-
-    // Create the item row container
-    var itemRow = h('div', { class: 'itemRow' }, [
-      // Top row with name, value, and delete button
-      h('div', { class: 'itemTopRow' }, [
-        labeledWrap('Item', name),
-        labeledWrap('Value', value),
-        del,
-      ]),
-      // Description textarea below
-      h('div', { class: 'itemDescription' }, [
-        labeledWrap('Description', desc),
-      ]),
-    ]);
-
-    list.appendChild(itemRow);
-  });
-}
-
-
-function renderJournal() {
-  var list = document.getElementById('journal.list');
-  if (!list) return;
-  list.innerHTML = '';
-
-  (ch.journal || []).forEach(function (entry, i) {
-    var dateInput = h('input', { class: 'inp', type: 'date', value: entry.date || '', style: { width: '180px' } });
-    var textArea = h('textarea', { class: 'inp', value: entry.text || '', placeholder: 'Session notes...' });
-    var del = h('button', { class: 'btn small', title: 'Remove entry' }, ['\u2715']);
-
-    dateInput.addEventListener('input', function () { ch.journal[i].date = dateInput.value; });
-    textArea.addEventListener('input', function () { ch.journal[i].text = textArea.value; });
-    del.addEventListener('click', function () { ch.journal.splice(i, 1); renderJournal(); });
-
-    var entryDiv = h('div', { class: 'journalEntry' }, [
-      h('div', { class: 'journalEntryHeader' }, [dateInput, del]),
-      h('div', { class: 'journalEntryBody' }, [textArea]),
-    ]);
-    list.appendChild(entryDiv);
-  });
-}
-
-// tiny helper to mirror your Combat labels
+// tiny helper for labeled cells in card-style rows
 function labeledWrap(label, child) {
   return h('label', { class: 'lbl' }, [
     h('div', { class: 'lblt' }, [label]),
@@ -2251,129 +2495,611 @@ function labeledWrap(label, child) {
   ]);
 }
 
-function renderAttacks() {
+// Expand/collapse state for description rows (session-only, keyed 'spell:N' / 'inv:N')
+var expandedRows = {};
+
+// Render note text as formatted content: consecutive "a | b | c" lines become
+// a real table (first row = header), everything else becomes paragraphs.
+function renderRichText(text) {
+  var container = h('div', { class: 'richText' });
+  var lines = String(text || '').split('\n');
+  var i = 0;
+  var buf = [];
+  function flushPara() {
+    if (buf.length) {
+      container.appendChild(h('p', { class: 'rtP' }, [buf.join('\n')]));
+      buf = [];
+    }
+  }
+  while (i < lines.length) {
+    var line = lines[i];
+    var isTableLine = line.indexOf(' | ') !== -1;
+    if (isTableLine && i + 1 < lines.length && lines[i + 1].indexOf(' | ') !== -1) {
+      flushPara();
+      var table = h('table', { class: 'rtTable' });
+      var ri = 0;
+      while (i < lines.length && lines[i].indexOf(' | ') !== -1) {
+        var tr = h('tr', {});
+        lines[i].split(' | ').forEach(function (c) {
+          tr.appendChild(h(ri === 0 ? 'th' : 'td', {}, [c.trim()]));
+        });
+        table.appendChild(tr);
+        ri++; i++;
+      }
+      container.appendChild(h('div', { class: 'rtTableWrap' }, [table]));
+      continue;
+    }
+    if (line.trim() === '') { flushPara(); i++; continue; }
+    buf.push(line);
+    i++;
+  }
+  flushPara();
+  return container;
+}
+
+// Size a textarea to roughly fit its content (accounts for soft-wrapped lines)
+function estimateRows(text, cap) {
+  var est = String(text || '').split('\n').reduce(function (n, line) {
+    return n + 1 + Math.floor(line.length / 60);
+  }, 0);
+  return Math.max(3, Math.min(cap || 12, est));
+}
+
+function caretButton(key, title, rerender) {
+  var open = !!expandedRows[key];
+  var btn = h('button', { class: 'caret', title: (open ? 'Hide ' : 'Show ') + title }, [open ? '▾' : '▸']);
+  btn.addEventListener('click', function () {
+    expandedRows[key] = !expandedRows[key];
+    rerender();
+  });
+  return btn;
+}
+
+// ⚔ toggle: marks a spell/item as shown in the Actions tab.
+// Edit mode shows the toggle button; view mode shows a small badge when flagged.
+function actionToggle(obj, onToggle) {
+  var btn = h('button', {
+    class: 'btn small actToggle editOnly' + (obj.action ? ' on' : ''),
+    title: obj.action ? 'Remove from Actions tab' : 'Show in Actions tab',
+  }, ['⚔']);
+  btn.addEventListener('click', function () {
+    if (obj.action) delete obj.action; else obj.action = true;
+    onToggle();
+    renderActions();
+  });
+  var badge = h('span', { class: 'actBadge viewOnly', title: 'Shown in Actions tab' }, [obj.action ? '⚔' : '']);
+  return h('span', { style: { display: 'inline-flex', alignItems: 'center' } }, [btn, badge]);
+}
+
+// Shared editable cells (name/range/hit/damage/notes) wired to items[i], with roll handlers.
+function makeCombatCells(items, i, kindLabel, syncLegacyToHit) {
+  var it = items[i];
+  var hitDcVal = (it.hitDc != null ? String(it.hitDc) : (it.toHit != null ? String(it.toHit) : ''));
+  var dmgVal = (it.damage != null ? String(it.damage) : '');
+
+  var name = h('input', { class: 'inp rowName', value: it.name || '', placeholder: kindLabel });
+  var range = h('input', { class: 'inp', value: (it.range != null ? String(it.range) : '') });
+
+  var hitDcInput = h('input', { class: 'inp', value: hitDcVal, title: 'Attack modifier (e.g. +5) or save DC (e.g. DC 13)' });
+  var hitBtn = h('button', { class: 'btn attack-roll-btn', title: 'Roll d20 + modifier' }, ['🎲']);
+  var hitWrap = h('div', { class: 'cell-inline' }, [hitDcInput, hitBtn]);
+
+  var dmgInput = h('input', { class: 'inp', value: dmgVal, title: 'Damage dice like 1d8+4 or 2d6+1d4+3' });
+  var dmgBtn = h('button', { class: 'btn attack-roll-btn', title: 'Roll damage' }, ['🎲']);
+  var dmgWrap = h('div', { class: 'cell-inline' }, [dmgInput, dmgBtn]);
+
+  var notes = h('input', { class: 'inp', value: it.notes || '' });
+
+  // Only offer a roll where there is something to roll: a numeric to-hit
+  // modifier (not a DC / empty field), and damage that contains dice.
+  function syncRollButtons() {
+    hitBtn.style.display = isRollableMod(hitDcInput.value) ? '' : 'none';
+    dmgBtn.style.display = containsDice(dmgInput.value) ? '' : 'none';
+  }
+  syncRollButtons();
+
+  name.addEventListener('input', function () { items[i].name = name.value; });
+  range.addEventListener('input', function () { items[i].range = range.value; });
+  hitDcInput.addEventListener('input', function () {
+    items[i].hitDc = hitDcInput.value;
+    if (syncLegacyToHit) items[i].toHit = hitDcInput.value;
+    syncRollButtons();
+  });
+  dmgInput.addEventListener('input', function () {
+    items[i].damage = dmgInput.value;
+    syncRollButtons();
+  });
+  notes.addEventListener('input', function () { items[i].notes = notes.value; });
+
+  function rollHit() {
+    if (!isRollableMod(hitDcInput.value)) return;
+    var mod = parseInt(String(hitDcInput.value).trim(), 10);
+    rollTo('1d20' + (mod >= 0 ? '+' + mod : mod), (it.name || kindLabel) + ' hit');
+  }
+  function rollDamage() {
+    var expr = String(dmgInput.value || '').trim();
+    if (!containsDice(expr)) return;
+    rollTo(expr, (it.name || kindLabel) + ' damage');
+  }
+  hitBtn.addEventListener('click', rollHit);
+  dmgBtn.addEventListener('click', rollDamage);
+  hitDcInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') rollHit(); });
+  hitDcInput.addEventListener('dblclick', rollHit);
+  dmgInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') rollDamage(); });
+  dmgInput.addEventListener('dblclick', rollDamage);
+
+  return { name: name, range: range, hitWrap: hitWrap, dmgWrap: dmgWrap, notes: notes };
+}
+
+// Full 6-column row for the Actions tab. opts: { onRender, syncLegacyToHit, onRemove, removeTitle, rowKey }
+function makeCombatRow(items, i, kindLabel, opts) {
+  opts = opts || {};
+  var cells = makeCombatCells(items, i, kindLabel, !!opts.syncLegacyToHit);
+  var del = h('button', { class: 'btn small editOnly', title: opts.removeTitle || 'Remove' }, ['✕']);
+  del.addEventListener('click', function () {
+    if (opts.onRemove) opts.onRemove();
+    else { items.splice(i, 1); if (opts.onRender) opts.onRender(); }
+  });
+  var row = h('div', { class: 'rowGrid' }, [cells.name, cells.range, cells.hitWrap, cells.dmgWrap, cells.notes, del]);
+  if (opts.rowKey) row.setAttribute('data-rowkey', opts.rowKey);
+  return row;
+}
+
+// Actions tab: native attacks + spells/items flagged with ⚔ (live-linked, not copies)
+function renderActions() {
   var list = document.getElementById('attacks.list');
   if (!list) return;
   list.innerHTML = '';
-
-  ch.attacks.forEach(function (atk, i) {
-    // Back-compat: use toHit if hitDc not present
-    var hitDcVal = (atk.hitDc != null ? String(atk.hitDc) : (atk.toHit != null ? String(atk.toHit) : '+0'));
-    var dmgVal   = (atk.damage != null ? String(atk.damage) : '1d4');
-    var rangeVal = (atk.range  != null ? String(atk.range)  : '');
-
-    // Inputs
-    var name  = h('input', { class: 'inp', value: atk.name || '' });
-    var range = h('input', { class: 'inp', value: rangeVal });
-
-    var hitDcInput = h('input', { class: 'inp', value: hitDcVal, title: 'Enter modifier (e.g. +5). Double-click/Enter or 🎲 to roll' });
-    var hitBtn = h('button', { class: 'btn attack-roll-btn', title: 'Roll Hit/DC' }, ['🎲']);
-    var hitWrap = h('div', { class: 'cell-inline' }, [hitDcInput, hitBtn]);
-
-    var dmgInput = h('input', { class: 'inp', value: dmgVal, title: 'Composite damage like 2d6+1d4+3' });
-    var dmgBtn = h('button', { class: 'btn attack-roll-btn', title: 'Roll Damage' }, ['🎲']);
-    var dmgWrap = h('div', { class: 'cell-inline' }, [dmgInput, dmgBtn]);
-
-    var notes = h('input', { class: 'inp', value: atk.notes || '' });
-    var del   = h('button', { class: 'btn small', title: 'Remove' }, ['✕']);
-
-    // Persist on input
-    name.addEventListener('input',  function () { ch.attacks[i].name  = name.value; });
-    range.addEventListener('input', function () { ch.attacks[i].range = range.value; });
-    hitDcInput.addEventListener('input', function () {
-      ch.attacks[i].hitDc = hitDcInput.value;
-      ch.attacks[i].toHit = hitDcInput.value; // keep legacy field updated
-    });
-    dmgInput.addEventListener('input', function () { ch.attacks[i].damage = dmgInput.value; });
-    notes.addEventListener('input', function () { ch.attacks[i].notes  = notes.value; });
-    del.addEventListener('click',   function () { ch.attacks.splice(i, 1); renderAttacks(); });
-
-    // Roll handlers
-    function rollHit() {
-      var mod = parseInt(String(hitDcInput.value).replace(/\s+/g, ''), 10);
-      if (!Number.isFinite(mod)) mod = 0;
-      var expr = `1d20${mod >= 0 ? '+'+mod : mod}`;
-      if (api) api.postMessage({ type: 'roll', expr });
-      else {
-        var r = rollExpr(expr);
-        setStatus(`Hit/DC (${atk.name || 'Attack'}): ${r.total} (${r.detail})`, 4000);
-      }
-    }
-    function rollDamage() {
-    var exprIn = String(dmgInput.value || '0');
-    var r = rollCompositeDamage(exprIn);
-
-    // If the host can understand this (simple NdM±K), let it roll; otherwise show our local result.
-    if (api && r.exprForHost) {
-        api.postMessage({ type: 'roll', expr: r.exprForHost });
-    } else {
-        setStatus(`Damage (${atk.name || 'Attack'}): ${r.total} (${r.detail})`, 4000);
-    }
-    }
-    hitBtn.addEventListener('click', rollHit);
-    dmgBtn.addEventListener('click', rollDamage);
-    hitDcInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') rollHit(); });
-    hitDcInput.addEventListener('dblclick', rollHit);
-    dmgInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') rollDamage(); });
-    dmgInput.addEventListener('dblclick', rollDamage);
-
-    // Row grid with labeled cells (like Combat)
-    var row = h('div', { class: 'rowGrid' }, [
-      labeledWrap('Attack', name),
-      labeledWrap('Range',  range),
-      labeledWrap('Hit/DC', hitWrap),
-      labeledWrap('Damage', dmgWrap),
-      labeledWrap('Notes',  notes),
-      del,
-    ]);
-
-    list.appendChild(row);
+  if (!ch.attacks.length) {
+    list.appendChild(h('div', { class: 'emptyHint' }, ['No attacks yet.']));
+  }
+  ch.attacks.forEach(function (_, i) {
+    list.appendChild(makeCombatRow(ch.attacks, i, 'Attack', { onRender: renderActions, syncLegacyToHit: true, rowKey: 'atk:' + i }));
   });
+
+  function renderFlagged(idBase, items, rowBuilder) {
+    var group = document.getElementById(idBase + '.group');
+    var sub = document.getElementById(idBase + '.list');
+    if (!group || !sub) return;
+    sub.innerHTML = '';
+    var any = false;
+    (items || []).forEach(function (it, i) {
+      if (!it || !it.action) return;
+      any = true;
+      sub.appendChild(rowBuilder(i));
+    });
+    group.style.display = any ? '' : 'none';
+  }
+  renderFlagged('actions.spells', ch.spells, function (i) { return buildSpellRow(i, true); });
+  renderFlagged('actions.features', ch.features, buildActionFeatureRow);
+  renderFlagged('actions.items', ch.inventory, function (i) {
+    return makeCombatRow(ch.inventory, i, 'Item', {
+      onRender: renderActions,
+      removeTitle: 'Remove from Actions',
+      onRemove: function () { delete ch.inventory[i].action; renderActions(); renderInventory(); },
+    });
+  });
+
+  applyEditingState();
 }
 
+function renderSpells() {
+  var list = document.getElementById('spells.list');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!ch.spells.length) {
+    list.appendChild(h('div', { class: 'emptyHint' }, ['No spells yet.']));
+  }
+
+  ch.spells.forEach(function (sp, i) {
+    list.appendChild(buildSpellRow(i, false));
+  });
+  applyEditingState();
+}
+
+// Shared spell row: Spells tab (inActions=false, with ⚔/delete) and the
+// Actions tab (inActions=true, with an unflag button) — same collapsible notes.
+function buildSpellRow(i, inActions) {
+  var sp = ch.spells[i];
+  var key = (inActions ? 'aspell:' : 'spell:') + i;
+  var rerender = inActions ? renderActions : renderSpells;
+  var wrap = h('div', { class: 'rowWrap', 'data-rowkey': key });
+  var cells = makeCombatCells(ch.spells, i, 'Spell', false);
+  var rowChildren = [caretButton(key, 'notes', rerender), cells.name, cells.range, cells.hitWrap, cells.dmgWrap];
+
+  if (inActions) {
+    var unflag = h('button', { class: 'btn small editOnly', title: 'Remove from Actions' }, ['✕']);
+    unflag.addEventListener('click', function () {
+      delete ch.spells[i].action;
+      renderActions();
+      renderSpells();
+    });
+    wrap.appendChild(h('div', { class: 'asrow' }, rowChildren.concat([unflag])));
+  } else {
+    var del = h('button', { class: 'btn small editOnly', title: 'Remove' }, ['✕']);
+    del.addEventListener('click', function () {
+      ch.spells.splice(i, 1);
+      delete expandedRows[key];
+      renderSpells();
+      renderActions();
+    });
+    wrap.appendChild(h('div', { class: 'srow' }, rowChildren.concat([actionToggle(sp, renderSpells), del])));
+  }
+
+  if (expandedRows[key]) {
+    var ta = h('textarea', { class: 'inp', value: sp.notes || '', placeholder: 'Notes / description...', rows: estimateRows(sp.notes, 18) });
+    ta.addEventListener('input', function () { ch.spells[i].notes = ta.value; });
+    wrap.appendChild(h('div', { class: 'subRow' }, [
+      h('div', { class: 'viewOnly' }, [renderRichText(sp.notes)]),
+      h('div', { class: 'editOnly' }, [labeledWrap('Notes', ta)]),
+    ]));
+  }
+  return wrap;
+}
+
+// Derive a section heading from a feature's source ("Sorcerer 3" → "Sorcerer",
+// "Racial" → "Species", "Feat option" → "Options", …)
+function featureSection(src) {
+  var s = String(src || '').trim();
+  if (!s) return 'Other';
+  if (/^background/i.test(s)) return 'Background';
+  if (/option$/i.test(s)) return 'Options';
+  if (/^feat$/i.test(s)) return 'Feats';
+  if (/^racial$/i.test(s)) return 'Species';
+  return s.replace(/\s+\d+$/, ''); // strip trailing class level
+}
+
+function renderFeatures() {
+  var list = document.getElementById('features.list');
+  if (!list) return;
+  list.innerHTML = '';
+  ch.features = ch.features || [];
+  if (!ch.features.length) {
+    list.appendChild(h('div', { class: 'emptyHint' }, ['No features yet — import from D&D Beyond or add one in Edit mode.']));
+  }
+
+  // Group into labeled sections by source, preserving first-appearance order
+  var sections = [];
+  var bySection = {};
+  ch.features.forEach(function (ft, i) {
+    var sec = featureSection(ft && ft.source);
+    if (!bySection[sec]) { bySection[sec] = []; sections.push(sec); }
+    bySection[sec].push(i);
+  });
+
+  sections.forEach(function (sec) {
+    if (sections.length > 1 || sec !== 'Other') {
+      list.appendChild(h('div', { class: 'featSectionHead' }, [sec]));
+    }
+    // Single-statement entries render as a compact table (no dropdown);
+    // everything else keeps the expandable row.
+    var shorts = [], longs = [];
+    bySection[sec].forEach(function (i) {
+      if (featureStatement(ch.features[i]) != null) shorts.push(i);
+      else longs.push(i);
+    });
+    shorts.forEach(function (i) { list.appendChild(buildShortFeatureRow(i)); });
+    longs.forEach(function (i) { list.appendChild(buildFeatureRow(i)); });
+  });
+  applyEditingState();
+}
+
+// Body of a feature's notes with our generated "Source — activation" header
+// line removed. Returns the remaining non-empty lines.
+function featureBodyLines(ft) {
+  var lines = String((ft && ft.notes) || '').split('\n')
+    .map(function (l) { return l.trim(); })
+    .filter(Boolean);
+  if (lines.length > 1) {
+    var first = lines[0];
+    // Header lines are short and don't read as sentences
+    if (first.length < 70 && !/[.!?]$/.test(first)) lines = lines.slice(1);
+  }
+  return lines;
+}
+
+// If a feature is just one short statement, return it (else null)
+function featureStatement(ft) {
+  var lines = featureBodyLines(ft);
+  if (lines.length === 1 && lines[0].length <= 160) return lines[0];
+  return null;
+}
+
+// Compact row for single-statement features: name | statement | ⚔ | ✕
+function buildShortFeatureRow(i) {
+  var ft = ch.features[i];
+  var statement = featureStatement(ft) || '';
+  // Preserve the header line (if any) when the statement text is edited
+  var allLines = String(ft.notes || '').split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
+  var header = allLines.length > 1 ? allLines[0] : '';
+
+  var wrap = h('div', { class: 'rowWrap', 'data-rowkey': 'feat:' + i });
+
+  var name = h('input', { class: 'inp rowName', value: ft.name || '', placeholder: 'Feature' });
+  name.addEventListener('input', function () { ch.features[i].name = name.value; });
+  // Statement sits below the title so long text wraps instead of clipping
+  var stmt = h('textarea', {
+    class: 'inp', value: statement,
+    rows: Math.max(1, Math.min(4, Math.ceil(statement.length / 60))),
+  });
+  stmt.addEventListener('input', function () {
+    ch.features[i].notes = header ? header + '\n\n' + stmt.value : stmt.value;
+  });
+
+  var del = h('button', { class: 'btn small editOnly', title: 'Remove' }, ['✕']);
+  del.addEventListener('click', function () {
+    ch.features.splice(i, 1);
+    renderFeatures();
+    renderActions();
+  });
+
+  wrap.appendChild(h('div', { class: 'ftrow' }, [
+    name,
+    actionToggle(ft, renderFeatures),
+    del,
+  ]));
+  wrap.appendChild(h('div', { class: 'ftStatement' }, [stmt]));
+  return wrap;
+}
+
+function buildFeatureRow(i) {
+  var ft = ch.features[i];
+  var key = 'feat:' + i;
+  var wrap = h('div', { class: 'rowWrap', 'data-rowkey': key });
+
+  var name = h('input', { class: 'inp rowName', value: ft.name || '', placeholder: 'Feature' });
+  name.addEventListener('input', function () { ch.features[i].name = name.value; });
+
+  var del = h('button', { class: 'btn small editOnly', title: 'Remove' }, ['✕']);
+  del.addEventListener('click', function () {
+    ch.features.splice(i, 1);
+    delete expandedRows[key];
+    renderFeatures();
+    renderActions();
+  });
+
+  wrap.appendChild(h('div', { class: 'frow' }, [
+    caretButton(key, 'details', renderFeatures),
+    name,
+    actionToggle(ft, renderFeatures),
+    del,
+  ]));
+
+  if (expandedRows[key]) {
+    var sub = h('div', { class: 'subRow' });
+    // Source is edited here; the section grouping above derives from it
+    var source = h('input', { class: 'inp', value: ft.source || '', placeholder: 'e.g. Sorcerer 3, Feat, Racial' });
+    source.addEventListener('input', function () { ch.features[i].source = source.value; });
+    sub.appendChild(h('div', { class: 'editOnly' }, [labeledWrap('Source', source)]));
+    sub.appendChild(h('div', { class: 'viewOnly' }, [renderRichText(ft.notes)]));
+    var notesTa = h('textarea', { class: 'inp', value: ft.notes || '', placeholder: 'Feature description...', rows: estimateRows(ft.notes, 16) });
+    notesTa.addEventListener('input', function () { ch.features[i].notes = notesTa.value; });
+    sub.appendChild(h('div', { class: 'editOnly' }, [labeledWrap('Details', notesTa)]));
+    wrap.appendChild(sub);
+  }
+  return wrap;
+}
+
+// Actions-tab row for a flagged feature: just the name, expanding to details
+function buildActionFeatureRow(i) {
+  var ft = ch.features[i];
+  var key = 'afeat:' + i;
+  var wrap = h('div', { class: 'rowWrap' });
+
+  var unflag = h('button', { class: 'btn small editOnly', title: 'Remove from Actions' }, ['✕']);
+  unflag.addEventListener('click', function () {
+    delete ch.features[i].action;
+    renderActions();
+    renderFeatures();
+  });
+
+  wrap.appendChild(h('div', { class: 'afrow' }, [
+    caretButton(key, 'details', renderActions),
+    h('span', { class: 'rowName', style: { fontSize: '13px' } }, [ft.name || 'Feature']),
+    unflag,
+  ]));
+
+  if (expandedRows[key]) {
+    wrap.appendChild(h('div', { class: 'subRow' }, [renderRichText(ft.notes)]));
+  }
+  return wrap;
+}
+
+function renderInventory() {
+  var list = document.getElementById('inventory.list');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!ch.inventory.length) {
+    list.appendChild(h('div', { class: 'emptyHint' }, ['No items yet.']));
+  }
+
+  ch.inventory.forEach(function (it, i) {
+    var key = 'inv:' + i;
+    var wrap = h('div', { class: 'rowWrap', 'data-rowkey': key });
+
+    var name = h('input', { class: 'inp rowName', value: it.name || '', placeholder: 'Item' });
+    var value = h('input', { class: 'inp', value: it.value || '', placeholder: 'e.g., 25 gp' });
+    name.addEventListener('input', function () { ch.inventory[i].name = name.value; });
+    value.addEventListener('input', function () { ch.inventory[i].value = value.value; });
+
+    var del = h('button', { class: 'btn small editOnly', title: 'Remove' }, ['✕']);
+    del.addEventListener('click', function () {
+      ch.inventory.splice(i, 1);
+      delete expandedRows[key];
+      renderInventory();
+      renderActions();
+    });
+
+    wrap.appendChild(h('div', { class: 'irow' }, [
+      caretButton(key, 'description', renderInventory),
+      name, value,
+      // Reveal the weapon stats when an item is flagged for the Actions tab
+      actionToggle(it, function () { if (it.action) expandedRows[key] = true; renderInventory(); }),
+      del,
+    ]));
+
+    if (expandedRows[key]) {
+      var sub = h('div', { class: 'subRow' });
+      sub.appendChild(h('div', { class: 'viewOnly' }, [renderRichText(it.desc)]));
+      var desc = h('textarea', { class: 'inp', value: it.desc || '', placeholder: 'Item description...', rows: estimateRows(it.desc, 10) });
+      desc.addEventListener('input', function () { ch.inventory[i].desc = desc.value; });
+      sub.appendChild(h('div', { class: 'editOnly' }, [labeledWrap('Description', desc)]));
+
+      if (it.action) {
+        var rng = h('input', { class: 'inp', value: it.range || '', placeholder: 'Melee' });
+        rng.addEventListener('input', function () { ch.inventory[i].range = rng.value; });
+        var hit = h('input', { class: 'inp', value: it.hitDc || '', placeholder: '+0' });
+        hit.addEventListener('input', function () { ch.inventory[i].hitDc = hit.value; });
+        var dmg = h('input', { class: 'inp', value: it.damage || '', placeholder: '1d6' });
+        dmg.addEventListener('input', function () { ch.inventory[i].damage = dmg.value; });
+        sub.appendChild(h('div', { class: 'subGrid3' }, [
+          labeledWrap('Range', rng), labeledWrap('Hit / DC', hit), labeledWrap('Damage', dmg),
+        ]));
+      }
+      wrap.appendChild(sub);
+    }
+    list.appendChild(wrap);
+  });
+  applyEditingState();
+}
+
+function renderJournal() {
+  var list = document.getElementById('journal.list');
+  if (!list) return;
+  list.innerHTML = '';
+
+  // Live view of the active session's roll log
+  if (session) {
+    var live = h('div', { class: 'journalEntry' }, [
+      h('div', { class: 'journalEntryHeader' }, [
+        h('span', { class: 'rowName' }, [session.title]),
+        h('span', { class: 'mut', style: { fontSize: '11px' } }, ['in progress']),
+      ]),
+    ]);
+    if (session.lines.length) {
+      var logBox = h('div', {});
+      session.lines.forEach(function (l) { logBox.appendChild(h('div', { class: 'logLine' }, [h('span', {}, [l])])); });
+      live.appendChild(logBox);
+    } else {
+      live.appendChild(h('div', { class: 'emptyHint' }, ['No rolls yet — they will appear here.']));
+    }
+    list.appendChild(live);
+  }
+
+  // Entries stored as notes in the Character Journal notebook
+  if (journalNotes.length) {
+    journalNotes.forEach(function (n, ji) {
+      var open = h('button', { class: 'btn small' }, ['Open']);
+      open.addEventListener('click', function () {
+        if (api) api.postMessage({ type: 'journalOpen', id: n.id });
+      });
+      list.appendChild(h('div', { class: 'journalRow', 'data-rowkey': 'jnote:' + ji }, [
+        h('span', { class: 'rowName' }, [n.title || '(untitled)']),
+        h('span', { class: 'mut', style: { fontSize: '11.5px' } }, [n.date || '']),
+        open,
+      ]));
+    });
+  } else if (!session) {
+    list.appendChild(h('div', { class: 'emptyHint' }, [
+      api ? 'No journal entries yet — start a session or add an entry.'
+          : 'Journal entries are stored as notes and need the Joplin host.',
+    ]));
+  }
+
+  // Legacy entries still embedded in the sheet YAML → offer migration
+  if ((ch.journal || []).length) {
+    var legacyWrap = h('div', { class: 'spellsBlock' });
+    legacyWrap.appendChild(h('div', { class: 'lblt' }, ['Stored in sheet (legacy)']));
+    if (api) {
+      var migrate = h('button', { class: 'btn small' }, ['Move ' + ch.journal.length + ' entr' + (ch.journal.length === 1 ? 'y' : 'ies') + ' to the Character Journal notebook']);
+      migrate.addEventListener('click', function () {
+        var entries = ch.journal.map(function (e) {
+          return { title: (e && e.title) || '', date: (e && e.date) || '', character: ch.name || '', log: [], text: (e && e.text) || '' };
+        });
+        api.postMessage({ type: 'journalMigrate', entries: entries });
+        setStatus('Moving journal entries to the Character Journal notebook…');
+      });
+      legacyWrap.appendChild(migrate);
+    }
+    ch.journal.forEach(function (entry, i) {
+      var titleInput = h('input', { class: 'inp rowName jTitle', value: entry.title || '', placeholder: 'Entry title' });
+      var dateInput = h('input', { class: 'inp jDate', type: 'date', value: entry.date || '' });
+      var textArea = h('textarea', { class: 'inp', value: entry.text || '', placeholder: 'Session notes...', rows: estimateRows(entry.text, 14) });
+      var del = h('button', { class: 'btn small editOnly', title: 'Remove entry' }, ['✕']);
+
+      titleInput.addEventListener('input', function () { ch.journal[i].title = titleInput.value; });
+      dateInput.addEventListener('input', function () { ch.journal[i].date = dateInput.value; });
+      textArea.addEventListener('input', function () { ch.journal[i].text = textArea.value; });
+      del.addEventListener('click', function () { ch.journal.splice(i, 1); renderJournal(); });
+
+      legacyWrap.appendChild(h('div', { class: 'journalEntry' }, [
+        h('div', { class: 'journalEntryHeader' }, [titleInput, dateInput, del]),
+        h('div', {}, [textArea]),
+      ]));
+    });
+    list.appendChild(legacyWrap);
+  }
+  applyEditingState();
+}
 
 function renderDynamic() {
-    // Update ability labels (mods)
-    ABILITIES.forEach(function (a) {
-        var lab = document.querySelector("[data-ability=\"".concat(a, "\"] .lblt"));
-        if (lab)
-            lab.textContent = "".concat(a, " (mod ").concat(fmtSigned(derived.mods[a]), ")");
-    });
-    // Derived chips
-    var pb = document.getElementById('derived.pb');
-    if (pb)
-        pb.textContent = fmtSigned(derived.proficiencyBonus);
-    var pp = document.getElementById('derived.pp');
-    if (pp)
-        pp.textContent = String(derived.passivePerception);
-    var ini = document.getElementById('derived.initiative');
-    if (ini)
-        ini.textContent = fmtSigned(derived.initiative);
-    // Saves
-    ABILITIES.forEach(function (a) {
-        var el = document.getElementById("save.total.".concat(a));
-        if (el)
-            el.textContent = fmtSigned(derived.savingThrows[a]);
-    });
-    // Skills
-    SKILLS.forEach(function (sk) {
-        var el = document.getElementById("skill.total.".concat(sk));
-        if (el)
-            el.textContent = fmtSigned(derived.skills[sk]);
-    });
-    // Spellcasting
-    const sdc = document.getElementById('derived.spell.dc');
-    if (sdc) sdc.textContent = String(derived.spellSaveDC);
-    const sam = document.getElementById('derived.spell.attack');
-    if (sam) sam.textContent = fmtSigned(derived.spellAtkMod);
+  // Header
+  var hn = document.getElementById('hdr.name');
+  if (hn) hn.textContent = ch.name || 'Unnamed Character';
+  var hm = document.getElementById('hdr.meta');
+  if (hm) hm.textContent = charMetaText();
 
+  // Abilities + saves
+  ABILITIES.forEach(function (a) {
+    var m = document.getElementById('abil.mod.' + a);
+    if (m) m.textContent = fmtSigned(derived.mods[a]);
+    var s = document.getElementById('abil.score.' + a);
+    if (s) s.textContent = String(ch.abilities[a]);
+    var el = document.getElementById('save.total.' + a);
+    if (el) el.textContent = fmtSigned(derived.savingThrows[a]);
+    var pip = document.getElementById('save.pip.' + a);
+    if (pip) pip.className = 'pip' + (ch.savingThrowsProficiencies[a] ? ' on' : '');
+  });
+
+  // Derived chips
+  var pb = document.getElementById('derived.pb');
+  if (pb) pb.textContent = fmtSigned(derived.proficiencyBonus);
+  var ini = document.getElementById('derived.initiative');
+  if (ini) ini.textContent = fmtSigned(derived.initiative);
+  var pp = document.getElementById('derived.pp');
+  if (pp) pp.textContent = String(derived.passivePerception);
+  var pins = document.getElementById('derived.pins');
+  if (pins) pins.textContent = String(10 + (derived.skills['Insight'] || 0));
+  var pinv = document.getElementById('derived.pinv');
+  if (pinv) pinv.textContent = String(10 + (derived.skills['Investigation'] || 0));
+
+  // Skills
+  SKILLS.forEach(function (sk) {
+    var el = document.getElementById('skill.total.' + sk);
+    if (el) el.textContent = fmtSigned(derived.skills[sk]);
+    var pip = document.getElementById('skill.pip.' + sk);
+    if (pip) {
+      var lvl = ch.skillsProficiencies[sk] || 'none';
+      pip.className = 'pip viewOnly' + (lvl === 'expert' ? ' expert' : lvl === 'prof' ? ' on' : '');
+    }
+  });
+
+  // Spellcasting
+  var sdc = document.getElementById('derived.spell.dc');
+  if (sdc) sdc.textContent = String(derived.spellSaveDC);
+  var sam = document.getElementById('derived.spell.attack');
+  if (sam) sam.textContent = fmtSigned(derived.spellAtkMod);
+  var sav = document.getElementById('spell.ability.view');
+  if (sav) sav.textContent = (ch.spellcasting?.ability && ch.spellcasting.ability !== 'NA') ? ch.spellcasting.ability : '—';
 }
+
 function fmtSigned(n) {
-    return (n >= 0 ? "+".concat(n) : "".concat(n));
+  return (n >= 0 ? "+".concat(n) : "".concat(n));
 }
 function signed(n) {
-    return n >= 0 ? "+".concat(n) : "".concat(n);
+  return n >= 0 ? "+".concat(n) : "".concat(n);
 }
+
 // ---- Bootstrap ----
 function main() {
     return __awaiter(this, void 0, void 0, function () {
@@ -2411,11 +3137,36 @@ function main() {
                             // Cache only for fast reopen/offline — but do NOT read it unless offline.
                             if (currentNoteId) saveCache(currentNoteId, ch);
 
+                            // Resume any active play session for this note
+                            // (host pushes rebuild `ch`).
+                            loadSessionState();
+                            journalEntry = null; // leaving journal view, if we were in it
+
                             buildUI(); // rebuild inputs to reflect host data
-                            setStatus('Loaded ✓');
+
+                            // Refresh the Character Journal listing for the Journal tab
+                            if (api) api.postMessage({ type: 'journalList' });
+                        } else if (msg.type === 'journalData') {
+                            journalEntry = msg.entry || { title: '', date: '', character: '', log: [], text: '' };
+                            journalNoteId = msg.noteId || null;
+                            buildJournalUI();
+                        } else if (msg.type === 'journalListData') {
+                            journalNotes = Array.isArray(msg.entries) ? msg.entries : [];
+                            renderJournal();
+                        } else if (msg.type === 'journalCreated') {
+                            setStatus('Journal entry "' + (msg.title || '') + '" created ✓');
+                        } else if (msg.type === 'journalSaved') {
+                            setStatus('Journal entry saved ✓');
+                        } else if (msg.type === 'journalMigrated') {
+                            ch.journal = [];
+                            postSave();
+                            renderJournal();
+                            setStatus('Moved ' + (msg.count || 0) + ' journal entr' + (msg.count === 1 ? 'y' : 'ies') + ' to the Character Journal notebook ✓');
                         } else if (msg.type === 'saved') {
                             setStatus('Saved ✓');
                             // Do NOT write cache here; it was already saved when we applied 'data'
+                        } else if (msg.type === 'synced') {
+                            setStatus('Synced from D&D Beyond ✓');
                         } else if (msg.type === 'error') {
                             setStatus(`Error: ${msg.message}`, 4000);
                         } else if (msg.type === 'rollResult') {
@@ -2465,7 +3216,8 @@ function mergeCharacter(base, incoming) {
     attacks: (incoming.attacks || base.attacks || []).map(a => ({ name: '', toHit: '', damage: '', notes: '', ...a })),
     spells: (incoming.spells || base.spells || []).map(s => ({ name: 'New Spell', range: '', hitDc: '+0', damage: '1d6', notes: '', ...s })), // <— NEW
     inventory: (incoming.inventory || base.inventory || []).map(it => ({ name: 'New Item', value: '', desc: '', ...it })),
-    journal: (incoming.journal || base.journal || []).map(e => ({ date: '', text: '', ...e })),
+    features: (incoming.features || base.features || []).map(f => ({ name: '', source: '', notes: '', ...f })),
+    journal: (incoming.journal || base.journal || []).map(e => ({ title: '', date: '', text: '', ...e })),
     spellcasting: {
     ...base.spellcasting,
     ...(incoming.spellcasting || {}),

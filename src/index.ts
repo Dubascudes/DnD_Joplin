@@ -1,9 +1,13 @@
 import joplin from 'api';
-import { ToolbarButtonLocation, SettingItemType } from 'api/types';
+import { ToolbarButtonLocation, SettingItemType, MenuItemLocation } from 'api/types';
 // import { parseFrontMatter, writeFrontMatter } from './utils/yaml';
 import { deriveStats, defaultCharacter, computeDerived, roll } from './utils/dnd';
-import { findDndBlock, upsertDndBlock, normalizeYamlToCharacter, readDndYaml } from './utils/dndNote'; // helpers above
+import {
+  findDndBlock, upsertDndBlock, normalizeYamlToCharacter, readDndYaml,
+  findDndJournalBlock, upsertDndJournalBlock, normalizeJournalEntry,
+} from './utils/dndNote'; // helpers above
 import { parseFrontMatter, writeFrontMatter, parse as parseYaml, stringify as yamlStringify } from './utils/yaml';
+import { parseDdbCharacterInput, ddbCharacterUrl, convertDdbToCharacter } from './utils/ddbImport';
 
 
 let panelReady = false;
@@ -109,6 +113,108 @@ async function loadCharacterFromNoteFresh() {
   return { noteId: fresh.id, character, derived };
 }
 
+// ---------- Character Journal (notebook of journal-entry notes) ----------
+const JOURNAL_FOLDER_TITLE = 'Character Journal';
+
+async function pagedGet(path: string[], query: any): Promise<any[]> {
+  const items: any[] = [];
+  let page = 1;
+  for (;;) {
+    const res = await joplin.data.get(path, { ...query, page });
+    items.push(...(res.items || []));
+    if (!res.has_more) break;
+    page++;
+  }
+  return items;
+}
+
+// The character sheet's folder is treated as the character/campaign folder;
+// journal entries live in a "Character Journal" notebook inside it.
+async function getCharacterFolderId(): Promise<string> {
+  const note = await joplin.workspace.selectedNote();
+  if (!note?.id) throw new Error('No active note');
+  const full = await joplin.data.get(['notes', note.id], { fields: ['id', 'parent_id'] });
+  return full.parent_id;
+}
+
+async function findJournalFolderId(create: boolean): Promise<string | null> {
+  const parentId = await getCharacterFolderId();
+  const folders = await pagedGet(['folders'], { fields: ['id', 'title', 'parent_id'] });
+  // If the selected note is itself a journal entry, its parent IS the journal folder.
+  const self = folders.find(f => f.id === parentId);
+  if (self && self.title === JOURNAL_FOLDER_TITLE) return self.id;
+  const existing = folders.find(f => f.parent_id === parentId && f.title === JOURNAL_FOLDER_TITLE);
+  if (existing) return existing.id;
+  if (!create) return null;
+  const created = await joplin.data.post(['folders'], null, { title: JOURNAL_FOLDER_TITLE, parent_id: parentId });
+  return created.id;
+}
+
+async function listJournalEntries(): Promise<any[]> {
+  const folderId = await findJournalFolderId(false);
+  if (!folderId) return [];
+  const notes = await pagedGet(['folders', folderId, 'notes'], { fields: ['id', 'title', 'body', 'updated_time'] });
+  const out: any[] = [];
+  for (const n of notes) {
+    const blk = findDndJournalBlock(String(n.body || ''));
+    const entry = blk ? normalizeJournalEntry(parseYaml(blk.yaml)) : null;
+    out.push({ id: n.id, title: n.title, date: entry?.date || '', updated: n.updated_time });
+  }
+  out.sort((a, b) => (b.updated || 0) - (a.updated || 0));
+  return out;
+}
+
+function nextSessionNumber(titles: string[]): number {
+  let maxN = 0;
+  for (const t of titles) {
+    const m = /^Session (\d+)/.exec(String(t || ''));
+    if (m) maxN = Math.max(maxN, parseInt(m[1], 10));
+  }
+  return maxN + 1;
+}
+
+async function createJournalEntry(entry: any): Promise<{ id: string; title: string }> {
+  const folderId = await findJournalFolderId(true);
+  const e = normalizeJournalEntry(entry || {});
+  if (!e.date) e.date = new Date().toISOString().slice(0, 10);
+  if (!e.title) {
+    const existing = await listJournalEntries();
+    e.title = `Session ${nextSessionNumber(existing.map(x => x.title))} - ${e.date}`;
+  }
+  const body = upsertDndJournalBlock('', yamlStringify(e));
+  const note = await joplin.data.post(['notes'], null, { title: e.title, body, parent_id: folderId });
+  return { id: note.id, title: e.title };
+}
+
+async function saveJournalEntry(noteId: string, entry: any): Promise<void> {
+  const e = normalizeJournalEntry(entry || {});
+  const fresh = await joplin.data.get(['notes', noteId], { fields: ['id', 'body'] });
+  const body = upsertDndJournalBlock(String(fresh.body || ''), yamlStringify(e));
+  markMutating();
+  await joplin.data.put(['notes', noteId], null, { title: e.title || 'Journal Entry', body });
+}
+
+// What should the panel display for the current note?
+async function loadActivePayload(): Promise<any | null> {
+  const fresh = await getFreshActiveNoteBody();
+  if (!fresh) return null;
+
+  const blk = findDndBlock(fresh.body);
+  const front = blk ? null : parseFrontMatter(fresh.body).front;
+  if (blk || front?.dnd) {
+    const raw = blk ? parseYaml(blk.yaml) : front.dnd;
+    const character = normalizeYamlToCharacter(raw);
+    const derived = computeDerived(character);
+    return { type: 'data', noteId: fresh.id, character, derived };
+  }
+
+  const jb = findDndJournalBlock(fresh.body);
+  if (jb) {
+    return { type: 'journalData', noteId: fresh.id, entry: normalizeJournalEntry(parseYaml(jb.yaml)) };
+  }
+  return null;
+}
+
 // ---------- Character Creation Wizard ----------
 function pbCost(score: number): number {
   // Standard 27-point buy 5e: scores 8..15 cost {0,1,2,3,4,5,7,9}
@@ -126,12 +232,151 @@ const ALIGNMENTS: any[] = require('./dnd-resources/5e-SRD-Alignments.json');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const RACES: any[] = require('./dnd-resources/5e-SRD-Races.json');
 
+const dialogHandles: Record<string, string> = {};
 async function promptDialog(id: string, title: string, html: string, buttons: any) {
-  const d = await joplin.views.dialogs.create(id);
+  // Joplin view ids must be unique per plugin lifetime — reuse handles on repeat runs.
+  const d = dialogHandles[id] || (dialogHandles[id] = await joplin.views.dialogs.create(id));
   await joplin.views.dialogs.setHtml(d, `<div style="font: 14px system-ui; min-width: 420px;">${html}</div>`);
   await joplin.views.dialogs.setButtons(d, buttons);
   const res = await joplin.views.dialogs.open(d);
   return res;
+}
+
+function escapeHtml(s: string) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ---------- D&D Beyond import ----------
+async function fetchDdbCharacter(id: string): Promise<any> {
+  const f: any = (globalThis as any).fetch;
+  if (typeof f !== 'function') {
+    throw new Error('fetch is not available in this Joplin version — paste the character JSON instead.');
+  }
+  const resp = await f(ddbCharacterUrl(id), {
+    headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0 (Joplin DnD Character Plugin)' },
+  });
+  if (resp.status === 403) {
+    throw new Error(
+      'D&D Beyond refused access to this character (HTTP 403). ' +
+      'Its privacy must be set to Public: open the character on dndbeyond.com → Edit → Home → Character Privacy → Public.');
+  }
+  if (resp.status === 404) throw new Error(`No D&D Beyond character found with id ${id}.`);
+  if (!resp.ok) throw new Error(`D&D Beyond request failed (HTTP ${resp.status}).`);
+  return await resp.json();
+}
+
+// Re-fetch a previously imported character and refresh the current note's dnd block,
+// preserving local-only content (journal, notes, expended slots, action flags).
+async function resyncCharacterFromDdb(): Promise<any> {
+  const { character: current } = await readCharacterFromFresh();
+  if (!current) throw new Error('No character found in the active note.');
+  if (current.ddbId == null) {
+    throw new Error('This character has no D&D Beyond link (ddbId). Only characters imported from D&D Beyond can be re-synced.');
+  }
+
+  const payload = await fetchDdbCharacter(String(current.ddbId));
+  const { character: fresh } = convertDdbToCharacter(payload);
+
+  // Preserve locally-authored content.
+  fresh.journal = Array.isArray(current.journal) ? current.journal : [];
+  if (current.notes) fresh.notes = current.notes;
+
+  // Preserve expended spell slots, clamped to the new totals.
+  for (let i = 1; i <= 9; i++) {
+    const used = Number(current.spellcasting?.slots?.[i]?.used ?? 0);
+    const total = Number(fresh.spellcasting?.slots?.[i]?.total ?? 0);
+    fresh.spellcasting.slots[i].used = Math.min(used, total);
+  }
+
+  // Preserve "show in Actions" flags (and manual combat stats on items), matched by name.
+  const byName = (arr: any[]) => {
+    const map: Record<string, any> = {};
+    for (const x of arr || []) if (x?.name) map[String(x.name).toLowerCase()] = x;
+    return map;
+  };
+  const oldSpells = byName(current.spells);
+  for (const sp of fresh.spells || []) {
+    if (oldSpells[String(sp?.name || '').toLowerCase()]?.action) sp.action = true;
+  }
+  const oldItems = byName(current.inventory);
+  for (const it of fresh.inventory || []) {
+    const old = oldItems[String(it?.name || '').toLowerCase()];
+    if (!old) continue;
+    if (old.action) it.action = true;
+    for (const f of ['range', 'hitDc', 'damage', 'notes']) {
+      if (old[f] != null && old[f] !== '') it[f] = old[f];
+    }
+  }
+  // Features: preserve manual action un-flagging is not tracked; just carry
+  // over custom combat stats the user added, matched by name.
+  const oldFeatures = byName(current.features);
+  for (const ft of fresh.features || []) {
+    const old = oldFeatures[String(ft?.name || '').toLowerCase()];
+    if (!old) continue;
+    if (old.action) ft.action = true;
+    for (const f of ['range', 'hitDc', 'damage']) {
+      if ((ft[f] == null || ft[f] === '') && old[f] != null && old[f] !== '') ft[f] = old[f];
+    }
+  }
+
+  await saveCharacterToCurrentNote(fresh);
+  return fresh;
+}
+
+async function runDdbImport() {
+  const res = await promptDialog('dnd-ddb-import', 'Import from D&D Beyond', `
+    <h3 style="margin-top:0">Import from D&D Beyond</h3>
+    <form name="f" style="display:grid; gap:10px;">
+      <label>Character URL or ID<br>
+        <input name="url" type="text" style="width:100%" placeholder="https://www.dndbeyond.com/characters/12345678"/>
+      </label>
+      <label>…or paste character JSON (from character-service.dndbeyond.com)<br>
+        <textarea name="json" rows="5" style="width:100%"></textarea>
+      </label>
+      <div style="color:#666; font-size:12px;">
+        The character's privacy must be set to <b>Public</b> on D&D Beyond
+        (open the character &rarr; Edit &rarr; Home &rarr; Character Privacy).
+      </div>
+    </form>
+  `, [{ id: 'ok', title: 'Import' }, { id: 'cancel', title: 'Cancel' }]);
+
+  if (res?.id !== 'ok') return;
+  const form = res?.formData?.f || {};
+
+  try {
+    let payload: any;
+    const pastedJson = String(form.json || '').trim();
+    if (pastedJson) {
+      payload = JSON.parse(pastedJson);
+    } else {
+      const id = parseDdbCharacterInput(String(form.url || ''));
+      if (!id) throw new Error('Enter a D&D Beyond character URL (dndbeyond.com/characters/…) or a numeric character id.');
+      payload = await fetchDdbCharacter(id);
+    }
+
+    const { character, warnings } = convertDdbToCharacter(payload);
+
+    const folder = await joplin.workspace.selectedFolder();
+    const yaml = yamlStringify(character).replace(/\t/g, '  ');
+    const body = upsertDndBlock('', yaml);
+    const note = await joplin.data.post(['notes'], null, {
+      title: character.name || 'Imported Character',
+      body,
+      parent_id: folder?.id,
+    });
+    try { await joplin.commands.execute('openNote', note.id); } catch { /* note is still created */ }
+
+    await promptDialog('dnd-ddb-import-done', 'Import complete', `
+      <h3 style="margin-top:0">Imported "${escapeHtml(character.name)}"</h3>
+      <p>A new note was created with the character sheet.</p>
+      ${warnings.length ? `<ul>${warnings.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul>` : ''}
+    `, [{ id: 'ok', title: 'OK' }]);
+  } catch (e: any) {
+    await promptDialog('dnd-ddb-import-err', 'Import failed', `
+      <h3 style="margin-top:0">Import failed</h3>
+      <p>${escapeHtml(String(e?.message || e))}</p>
+    `, [{ id: 'ok', title: 'OK' }]);
+  }
 }
 
 async function openCharacterCreationWizard() {
@@ -313,10 +558,9 @@ joplin.plugins.register({
 		if (msg.type === 'ready') {
 		panelReady = true;
 		while (pending.length) await joplin.views.panels.postMessage(panel, pending.shift());
-	// -      await sendToPanel({ type: 'load' });
 	      // Immediately load from the current note on first ready.
-	      const { noteId, character, derived } = await loadCharacterFromNoteFresh();
-	      await joplin.views.panels.postMessage(panel, { type: 'data', noteId, character, derived });
+	      const payload = await loadActivePayload();
+	      if (payload) await joplin.views.panels.postMessage(panel, payload);
 		  await pushThemeToPanel();
 		return;
 		}
@@ -324,10 +568,61 @@ joplin.plugins.register({
 
 		if (msg.type === 'load') {
 			try {
-				const { noteId, character, derived } = await loadCharacterFromNoteFresh();
-				await joplin.views.panels.postMessage(panel, { type: 'data', noteId, character, derived });
+				const payload = await loadActivePayload();
+				if (payload) await joplin.views.panels.postMessage(panel, payload);
 			} catch (e) {
 				await joplin.views.panels.postMessage(panel, { type: 'error', message: String(e) });
+			}
+			return;
+		}
+
+		if (msg.type === 'journalList') {
+			try {
+				const entries = await listJournalEntries();
+				await joplin.views.panels.postMessage(panel, { type: 'journalListData', entries });
+			} catch (e: any) {
+				await joplin.views.panels.postMessage(panel, { type: 'journalListData', entries: [] });
+			}
+			return;
+		}
+
+		if (msg.type === 'journalCreate') {
+			try {
+				const created = await createJournalEntry(msg.entry);
+				await joplin.views.panels.postMessage(panel, { type: 'journalCreated', id: created.id, title: created.title });
+				const entries = await listJournalEntries();
+				await joplin.views.panels.postMessage(panel, { type: 'journalListData', entries });
+				if (msg.open) { try { await joplin.commands.execute('openNote', created.id); } catch {} }
+			} catch (e: any) {
+				await joplin.views.panels.postMessage(panel, { type: 'error', message: 'Journal: ' + String(e?.message || e) });
+			}
+			return;
+		}
+
+		if (msg.type === 'journalOpen') {
+			try { await joplin.commands.execute('openNote', msg.id); } catch {}
+			return;
+		}
+
+		if (msg.type === 'journalSave') {
+			try {
+				await saveJournalEntry(msg.noteId, msg.entry);
+				await joplin.views.panels.postMessage(panel, { type: 'journalSaved' });
+			} catch (e: any) {
+				await joplin.views.panels.postMessage(panel, { type: 'error', message: 'Journal: ' + String(e?.message || e) });
+			}
+			return;
+		}
+
+		if (msg.type === 'journalMigrate') {
+			try {
+				const entries = Array.isArray(msg.entries) ? msg.entries : [];
+				for (const e of entries) await createJournalEntry(e);
+				await joplin.views.panels.postMessage(panel, { type: 'journalMigrated', count: entries.length });
+				const list = await listJournalEntries();
+				await joplin.views.panels.postMessage(panel, { type: 'journalListData', entries: list });
+			} catch (e: any) {
+				await joplin.views.panels.postMessage(panel, { type: 'error', message: 'Journal: ' + String(e?.message || e) });
 			}
 			return;
 		}
@@ -343,6 +638,20 @@ joplin.plugins.register({
 		return;
 		}
 
+
+		if (msg.type === 'ddbSync') {
+			try {
+				const fresh = await resyncCharacterFromDdb();
+				const note = await joplin.workspace.selectedNote();
+				const c = normalizeYamlToCharacter(fresh);
+				const derived = computeDerived(c);
+				await joplin.views.panels.postMessage(panel, { type: 'data', noteId: note?.id, character: c, derived });
+				await joplin.views.panels.postMessage(panel, { type: 'synced' });
+			} catch (e: any) {
+				await joplin.views.panels.postMessage(panel, { type: 'error', message: String(e?.message || e) });
+			}
+			return;
+		}
 
 		if (msg.type === 'roll') {
 		const result = roll(msg.expr);
@@ -360,7 +669,7 @@ joplin.plugins.register({
     const refreshPanelVisibility = async () => {
       const note = await joplin.workspace.selectedNote();
       if (!note) { await joplin.views.panels.hide(panel); return; }
-      const visible = hasCharacterInBody(note.body);
+      const visible = hasCharacterInBody(note.body) || !!findDndJournalBlock(note.body);
       if (visible) {
         await joplin.views.panels.show(panel);
         await sendToPanel({ type: 'load' });
@@ -391,6 +700,18 @@ joplin.plugins.register({
       },
     });
 
+    await joplin.commands.register({
+      name: 'importDndBeyondCharacter',
+      label: 'Import D&D Beyond Character',
+      execute: async () => { await runDdbImport(); },
+    });
+
+    await joplin.views.menuItems.create(
+      'importDndBeyondCharacterMenuItem',
+      'importDndBeyondCharacter',
+      MenuItemLocation.Tools
+    );
+
     await joplin.views.toolbarButtons.create(
       'openDndEditorBtn',
       'openDndEditor',
@@ -406,19 +727,10 @@ joplin.plugins.register({
 	async function refreshFromNoteChange() {
 	if (withinMutationGrace()) return; // ignore echoes from our own put/setText
 
-	const fresh = await getFreshActiveNoteBody();
-	if (!fresh) { await joplin.views.panels.hide(panel); return; }
-
-	const visible = !!findDndBlock(fresh.body) || !!parseFrontMatter(fresh.body).front?.dnd;
-
-	if (visible) {
+	const payload = await loadActivePayload();
+	if (payload) {
 		await joplin.views.panels.show(panel);
-
-		// Recompute and push data based on CURRENT fresh body
-		const { character } = await readCharacterFromFresh();
-		const c = character || defaultCharacter();
-		const derived = computeDerived(c);
-		await sendToPanel({ type: 'data', character: c, derived });
+		await sendToPanel(payload);
 	} else {
 		await joplin.views.panels.hide(panel);
 	}
