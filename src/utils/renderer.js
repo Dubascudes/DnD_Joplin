@@ -1330,7 +1330,7 @@ var SHEET_CSS = `
   /* --- Ability strip --- */
   .abilityRow { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px; }
   @media (max-width:640px) { .abilityRow { grid-template-columns:repeat(3,minmax(0,1fr)); } }
-  .abilityBox { background:var(--card-bg); border:1px solid var(--bd); border-radius:10px; padding:8px 4px 10px; text-align:center; }
+  .abilityBox { background:var(--card-bg); border:1px solid var(--bd); border-radius:10px; padding:8px 8px 10px; text-align:center; }
   .abilityBox .abName { font-size:10px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase; color:var(--mut); margin-bottom:0; }
   .abMod { font-size:24px; font-weight:700; line-height:1.2; margin:2px 0 4px; cursor:pointer; }
   .abMod:hover { color:var(--accent); }
@@ -1353,40 +1353,31 @@ var SHEET_CSS = `
   .hpTemp { display:flex; align-items:center; justify-content:center; gap:6px; font-size:11px; color:var(--mut); margin-top:2px; }
   .hpTemp .inp { width:52px; text-align:center; padding:2px 4px; }
 
-  /* --- Main grid --- */
-  .mainGrid { display:grid; grid-template-columns:minmax(230px,290px) minmax(0,1fr); gap:10px; align-items:start; }
-  @media (max-width:840px) { .mainGrid { grid-template-columns:1fr; } }
   .colStack { display:flex; flex-direction:column; gap:10px; min-width:0; }
 
-  /* --- Saving throws --- */
-  .savesGrid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
-  .saveItem { display:flex; align-items:center; gap:7px; border:1px solid var(--bd); border-radius:8px; padding:5px 8px; background:var(--chip); cursor:pointer; user-select:none; }
-  .saveItem:hover { border-color:var(--accent); }
-  .saveName { flex:1; font-size:12.5px; font-weight:600; }
-  .saveVal { font-weight:700; }
   .pip { width:11px; height:11px; border-radius:50%; border:2px solid var(--mut); flex:none; background:transparent; display:inline-block; }
   .pip.on { background:var(--accent); border-color:var(--accent); }
   .pip.expert { background:var(--accent); border-color:var(--accent); box-shadow:0 0 0 1.5px var(--card-bg), 0 0 0 3px var(--accent); }
-
-  /* --- Senses --- */
-  .senseRow { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:4px 2px; font-size:13px; }
-  .senseRow + .senseRow { border-top:1px solid var(--chip); }
-  .senseVal { font-weight:700; }
-
-  /* --- Skills --- */
-  .skillRow { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:8px; align-items:center; padding:4px 2px; }
-  .skillRow + .skillRow { border-top:1px solid var(--chip); }
-  .skillName { font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .skillGroupHead {
-    display:flex; justify-content:space-between; align-items:baseline;
-    margin:10px 2px 2px; padding-bottom:3px; border-bottom:1px solid var(--bd);
-    font-size:10px; font-weight:700; letter-spacing:1.1px; text-transform:uppercase; color:var(--mut);
-  }
-  .skillGroupHead:first-child { margin-top:0; }
-  .skillGroupMod { font-size:11px; font-weight:700; }
-  .skillVal { font-weight:700; min-width:34px; text-align:right; cursor:pointer; }
+  .saveVal { font-weight:700; }
+  .skillVal { font-weight:700; min-width:30px; text-align:right; cursor:pointer; }
   .skillVal:hover { color:var(--accent); }
-  .skillRow .sel { width:74px; padding:2px 4px; }
+
+  /* --- Save + skills inside each ability column --- */
+  .abSaveRow {
+    display:flex; align-items:center; justify-content:center; gap:6px;
+    margin-top:7px; padding:3px 6px; background:var(--chip); border-radius:6px;
+    cursor:pointer; user-select:none; font-size:11.5px;
+  }
+  .abSaveRow:hover { box-shadow:inset 0 0 0 1px var(--accent); }
+  .abSkills { margin-top:7px; border-top:1px solid var(--chip); padding-top:4px; text-align:left; }
+  .abSkillRow { display:flex; align-items:center; gap:4px; padding:2px 2px; font-size:11.5px; }
+  .abSkillRow + .abSkillRow { border-top:1px solid var(--chip); }
+  .abSkillName { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .abSkillRow .pip { width:9px; height:9px; }
+  .abSkillRow .sel { width:44px; padding:1px 2px; font-size:11px; }
+
+  /* --- Senses band --- */
+  .sensesRow { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
 
   /* --- Tabs --- */
   .tabBar { display:flex; gap:2px; border-bottom:2px solid var(--bd); overflow-x:auto; scrollbar-width:none; }
@@ -1744,7 +1735,7 @@ function gotoSearchResult(hit) {
   else if (e.nav.rowkey) el = document.querySelector('[data-rowkey="' + e.nav.rowkey + '"]');
   else if (e.tab) el = document.querySelector('.tabSection[data-tabid="' + e.tab + '"]');
   if (!el) return;
-  var target = el.closest && (el.closest('.skillRow, .saveItem, .abilityBox, .rowWrap, .rowGrid, .journalRow') || el) || el;
+  var target = el.closest && (el.closest('.abSkillRow, .abSaveRow, .abilityBox, .rowWrap, .rowGrid, .journalRow') || el) || el;
   if (typeof target.scrollIntoView === 'function') {
     try { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { try { target.scrollIntoView(); } catch {} }
   }
@@ -1975,7 +1966,7 @@ function buildUI() {
     ]),
   ]));
 
-  // ===== Ability score strip =====
+  // ===== Ability strip: score + save + that ability's skills, per column =====
   var abilityRow = h('div', { class: 'abilityRow' });
   ABILITIES.forEach(function (a) {
     var modEl = h('div', { class: 'abMod', id: 'abil.mod.' + a, title: 'Roll ' + a + ' check' }, [fmtSigned(derived.mods[a])]);
@@ -1983,12 +1974,49 @@ function buildUI() {
     var scoreView = h('span', { class: 'abScore viewOnly', id: 'abil.score.' + a }, [String(ch.abilities[a])]);
     var scoreInp = h('input', { class: 'inp abScoreInp editOnly', type: 'number', value: ch.abilities[a], min: 1, max: 30 });
     scoreInp.addEventListener('input', function () { updateDeep('abilities.' + a, clamp(int(scoreInp.value, ch.abilities[a]), 1, 30)); });
+
+    var savePip = h('span', { class: 'pip' + (ch.savingThrowsProficiencies[a] ? ' on' : ''), id: 'save.pip.' + a });
+    var saveRow = h('div', {
+      class: 'abSaveRow',
+      title: isEditing ? 'Toggle save proficiency' : 'Roll ' + a + ' save',
+    }, [
+      savePip,
+      h('span', {}, ['Save']),
+      h('span', { class: 'saveVal', id: 'save.total.' + a }, [fmtSigned(derived.savingThrows[a])]),
+    ]);
+    saveRow.addEventListener('click', function () {
+      if (isEditing) updateDeep('savingThrowsProficiencies.' + a, !ch.savingThrowsProficiencies[a]);
+      else rollTo('1d20' + signed(derived.savingThrows[a]), a + ' save');
+    });
+
     var box = h('div', { class: 'abilityBox', 'data-ability': a }, [
       h('div', { class: 'abName lblt' }, [a]),
       modEl,
       scoreView,
       scoreInp,
+      saveRow,
     ]);
+
+    var abilitySkills = SKILLS.filter(function (sk) { return SKILL_TO_ABILITY[sk] === a; });
+    if (abilitySkills.length) {
+      var skillList = h('div', { class: 'abSkills' });
+      abilitySkills.forEach(function (sk) {
+        var lvl = ch.skillsProficiencies[sk] || 'none';
+        var pip = h('span', { class: 'pip viewOnly' + (lvl === 'expert' ? ' expert' : lvl === 'prof' ? ' on' : ''), id: 'skill.pip.' + sk });
+        var sel = selectProf(lvl, function (p) { return updateDeep('skillsProficiencies.' + sk, p); });
+        sel.classList.add('editOnly');
+        var profCell = h('span', { style: { display: 'inline-flex', alignItems: 'center' } }, [pip, sel]);
+        var val = h('span', { class: 'skillVal', id: 'skill.total.' + sk, title: 'Roll ' + sk }, [fmtSigned(derived.skills[sk])]);
+        val.addEventListener('click', function () { rollTo('1d20' + signed(derived.skills[sk]), sk); });
+        skillList.appendChild(h('div', { class: 'abSkillRow' }, [
+          profCell,
+          h('span', { class: 'abSkillName', title: sk }, [sk]),
+          val,
+        ]));
+      });
+      box.appendChild(skillList);
+    }
+
     attachAbilityTooltip(box, a);
     abilityRow.appendChild(box);
   });
@@ -2066,74 +2094,16 @@ function buildUI() {
 
   sheet.appendChild(h('div', { class: 'vitalsRow' }, [pbTile, speedTile, initTile, acTile, hpTile]));
 
-  // ===== Main two-column body =====
-  var leftCol = h('div', { class: 'colStack' });
+  // ===== Senses band =====
+  sheet.appendChild(h('div', { class: 'sensesRow' }, [
+    vitalTile('Passive Perception', h('div', { class: 'vitalValue' }, [h('span', { id: 'derived.pp' }, [String(derived.passivePerception)])])),
+    vitalTile('Passive Insight', h('div', { class: 'vitalValue' }, [h('span', { id: 'derived.pins' }, [String(10 + (derived.skills['Insight'] || 0))])])),
+    vitalTile('Passive Investigation', h('div', { class: 'vitalValue' }, [h('span', { id: 'derived.pinv' }, [String(10 + (derived.skills['Investigation'] || 0))])])),
+  ]));
+
+  // ===== Full-width tab content =====
   var rightCol = h('div', { class: 'colStack' });
-  sheet.appendChild(h('div', { class: 'mainGrid' }, [leftCol, rightCol]));
-
-  // --- Saving throws ---
-  var savesGrid = h('div', { class: 'savesGrid' });
-  ABILITIES.forEach(function (a) {
-    var on = !!ch.savingThrowsProficiencies[a];
-    var pip = h('span', { class: 'pip' + (on ? ' on' : ''), id: 'save.pip.' + a });
-    var item = h('div', {
-      class: 'saveItem',
-      title: isEditing ? 'Toggle proficiency' : 'Roll ' + a + ' save',
-    }, [
-      pip,
-      h('span', { class: 'saveName' }, [a]),
-      h('span', { class: 'saveVal', id: 'save.total.' + a }, [fmtSigned(derived.savingThrows[a])]),
-    ]);
-    item.addEventListener('click', function () {
-      if (isEditing) updateDeep('savingThrowsProficiencies.' + a, !ch.savingThrowsProficiencies[a]);
-      else rollTo('1d20' + signed(derived.savingThrows[a]), a + ' save');
-    });
-    savesGrid.appendChild(item);
-  });
-  leftCol.appendChild(h('div', { class: 'card' }, [
-    h('h3', { class: 'cardTitle' }, ['Saving Throws']),
-    savesGrid,
-  ]));
-
-  // --- Senses ---
-  function senseRow(label, id, value) {
-    return h('div', { class: 'senseRow' }, [
-      h('span', {}, [label]),
-      h('span', { class: 'senseVal', id: id }, [String(value)]),
-    ]);
-  }
-  leftCol.appendChild(h('div', { class: 'card' }, [
-    h('h3', { class: 'cardTitle' }, ['Senses']),
-    senseRow('Passive Perception', 'derived.pp', derived.passivePerception),
-    senseRow('Passive Insight', 'derived.pins', 10 + (derived.skills['Insight'] || 0)),
-    senseRow('Passive Investigation', 'derived.pinv', 10 + (derived.skills['Investigation'] || 0)),
-  ]));
-
-  // --- Skills (grouped under their parent ability) ---
-  var skillsWrap = h('div', {});
-  ABILITIES.forEach(function (a) {
-    var group = SKILLS.filter(function (sk) { return SKILL_TO_ABILITY[sk] === a; });
-    if (!group.length) return; // CON has no skills
-    skillsWrap.appendChild(h('div', { class: 'skillGroupHead' }, [
-      h('span', {}, [ABILITY_FULLNAMES[a] || a]),
-      h('span', { class: 'skillGroupMod', id: 'skillhdr.mod.' + a }, [fmtSigned(derived.mods[a])]),
-    ]));
-    group.forEach(function (sk) {
-      var lvl = ch.skillsProficiencies[sk] || 'none';
-      var pip = h('span', { class: 'pip viewOnly' + (lvl === 'expert' ? ' expert' : lvl === 'prof' ? ' on' : ''), id: 'skill.pip.' + sk });
-      var sel = selectProf(lvl, function (p) { return updateDeep('skillsProficiencies.' + sk, p); });
-      sel.classList.add('editOnly');
-      var profCell = h('span', { style: { display: 'inline-flex', alignItems: 'center' } }, [pip, sel]);
-      var name = h('span', { class: 'skillName' }, [sk]);
-      var val = h('span', { class: 'skillVal', id: 'skill.total.' + sk, title: 'Roll ' + sk }, [fmtSigned(derived.skills[sk])]);
-      val.addEventListener('click', function () { rollTo('1d20' + signed(derived.skills[sk]), sk); });
-      skillsWrap.appendChild(h('div', { class: 'skillRow' }, [profCell, name, val]));
-    });
-  });
-  leftCol.appendChild(h('div', { class: 'card' }, [
-    h('h3', { class: 'cardTitle' }, ['Skills']),
-    skillsWrap,
-  ]));
+  sheet.appendChild(rightCol);
 
   // --- Tab bar + sections ---
   var tabBar = h('div', { class: 'tabBar' });
