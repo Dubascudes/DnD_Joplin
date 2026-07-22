@@ -1377,7 +1377,13 @@ var SHEET_CSS = `
   .skillRow { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:8px; align-items:center; padding:4px 2px; }
   .skillRow + .skillRow { border-top:1px solid var(--chip); }
   .skillName { font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .skillAb { color:var(--mut); font-size:10px; text-transform:uppercase; letter-spacing:0.5px; }
+  .skillGroupHead {
+    display:flex; justify-content:space-between; align-items:baseline;
+    margin:10px 2px 2px; padding-bottom:3px; border-bottom:1px solid var(--bd);
+    font-size:10px; font-weight:700; letter-spacing:1.1px; text-transform:uppercase; color:var(--mut);
+  }
+  .skillGroupHead:first-child { margin-top:0; }
+  .skillGroupMod { font-size:11px; font-weight:700; }
   .skillVal { font-weight:700; min-width:34px; text-align:right; cursor:pointer; }
   .skillVal:hover { color:var(--accent); }
   .skillRow .sel { width:74px; padding:2px 4px; }
@@ -2103,21 +2109,26 @@ function buildUI() {
     senseRow('Passive Investigation', 'derived.pinv', 10 + (derived.skills['Investigation'] || 0)),
   ]));
 
-  // --- Skills ---
+  // --- Skills (grouped under their parent ability) ---
   var skillsWrap = h('div', {});
-  SKILLS.forEach(function (sk) {
-    var lvl = ch.skillsProficiencies[sk] || 'none';
-    var pip = h('span', { class: 'pip viewOnly' + (lvl === 'expert' ? ' expert' : lvl === 'prof' ? ' on' : ''), id: 'skill.pip.' + sk });
-    var sel = selectProf(lvl, function (p) { return updateDeep('skillsProficiencies.' + sk, p); });
-    sel.classList.add('editOnly');
-    var profCell = h('span', { style: { display: 'inline-flex', alignItems: 'center' } }, [pip, sel]);
-    var name = h('span', { class: 'skillName' }, [
-      sk + ' ',
-      h('span', { class: 'skillAb' }, [SKILL_TO_ABILITY[sk]]),
-    ]);
-    var val = h('span', { class: 'skillVal', id: 'skill.total.' + sk, title: 'Roll ' + sk }, [fmtSigned(derived.skills[sk])]);
-    val.addEventListener('click', function () { rollTo('1d20' + signed(derived.skills[sk]), sk); });
-    skillsWrap.appendChild(h('div', { class: 'skillRow' }, [profCell, name, val]));
+  ABILITIES.forEach(function (a) {
+    var group = SKILLS.filter(function (sk) { return SKILL_TO_ABILITY[sk] === a; });
+    if (!group.length) return; // CON has no skills
+    skillsWrap.appendChild(h('div', { class: 'skillGroupHead' }, [
+      h('span', {}, [ABILITY_FULLNAMES[a] || a]),
+      h('span', { class: 'skillGroupMod', id: 'skillhdr.mod.' + a }, [fmtSigned(derived.mods[a])]),
+    ]));
+    group.forEach(function (sk) {
+      var lvl = ch.skillsProficiencies[sk] || 'none';
+      var pip = h('span', { class: 'pip viewOnly' + (lvl === 'expert' ? ' expert' : lvl === 'prof' ? ' on' : ''), id: 'skill.pip.' + sk });
+      var sel = selectProf(lvl, function (p) { return updateDeep('skillsProficiencies.' + sk, p); });
+      sel.classList.add('editOnly');
+      var profCell = h('span', { style: { display: 'inline-flex', alignItems: 'center' } }, [pip, sel]);
+      var name = h('span', { class: 'skillName' }, [sk]);
+      var val = h('span', { class: 'skillVal', id: 'skill.total.' + sk, title: 'Roll ' + sk }, [fmtSigned(derived.skills[sk])]);
+      val.addEventListener('click', function () { rollTo('1d20' + signed(derived.skills[sk]), sk); });
+      skillsWrap.appendChild(h('div', { class: 'skillRow' }, [profCell, name, val]));
+    });
   });
   leftCol.appendChild(h('div', { class: 'card' }, [
     h('h3', { class: 'cardTitle' }, ['Skills']),
@@ -3059,6 +3070,8 @@ function renderDynamic() {
     if (el) el.textContent = fmtSigned(derived.savingThrows[a]);
     var pip = document.getElementById('save.pip.' + a);
     if (pip) pip.className = 'pip' + (ch.savingThrowsProficiencies[a] ? ' on' : '');
+    var gm = document.getElementById('skillhdr.mod.' + a);
+    if (gm) gm.textContent = fmtSigned(derived.mods[a]);
   });
 
   // Derived chips
